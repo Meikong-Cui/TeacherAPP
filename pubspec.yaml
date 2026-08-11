@@ -1,0 +1,33 @@
+name: teacher_app
+description: "语亦丰儿童康复教育系统 - 教师端 App（Flutter）。含上下班签到（1km 围栏）与预留的 AI 教案生成接口。"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.5.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  go_router: ^14.2.0
+  geolocator: ^12.0.0
+  http: ^1.2.0
+  intl: ^0.19.0
+  shared_preferences: ^2.2.2
+  image_picker: ^1.1.2
+  pdf: ^3.10.7
+  printing: ^5.12.0
+  flutter_local_notifications: ^17.2.0
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/fonts/
+    - assets/images/hearing_symbols/
