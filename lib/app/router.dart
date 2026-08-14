@@ -3,16 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:teacher_app/features/auth/login_screen.dart';
 import 'package:teacher_app/features/ai_lesson_plan/data/ai_lesson_plan_repository.dart';
 import 'package:teacher_app/features/ai_lesson_plan/presentation/ai_lesson_plan_screen.dart';
-import 'package:teacher_app/features/children/assessment_form_screen.dart';
-import 'package:teacher_app/features/children/assessment_tasks_screen.dart';
-import 'package:teacher_app/features/children/child_detail_screen.dart';
 import 'package:teacher_app/features/children/children_list_screen.dart';
-import 'package:teacher_app/features/children/iep_goals_screen.dart';
-import 'package:teacher_app/features/children/rehab_guidance_screen.dart';
-import 'package:teacher_app/features/children/training_record_screen.dart';
 import 'package:teacher_app/features/clock_in/presentation/clock_in_screen.dart';
 import 'package:teacher_app/features/home/home_screen.dart';
-import 'package:teacher_app/features/messages/messages_screen.dart';
 import 'package:teacher_app/features/profile/profile_screen.dart';
 import 'package:teacher_app/features/reimbursement/presentation/reimbursement_list_screen.dart';
 import 'package:teacher_app/features/reimbursement/presentation/reimbursement_new_screen.dart';
@@ -21,8 +14,17 @@ import 'package:teacher_app/features/rehab/presentation/rehab_archive_list_scree
 import 'package:teacher_app/features/rehab/presentation/rehab_archive_detail_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_archive_detail_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_edit_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/child_hub_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/add_child_screen.dart';
+import 'package:teacher_app/features/office/office_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/autism_items_editor_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/autism_charts_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/autism_effect_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/autism_monthly_plan_ai_screen.dart';
 import 'package:teacher_app/features/seal/presentation/seal_apply_screen.dart';
 import 'package:teacher_app/features/seal/presentation/seal_list_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/iep_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/add_iep_goal_screen.dart';
 import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/shared/app_shell.dart';
 
@@ -73,9 +75,9 @@ final GoRouter appRouter = GoRouter(
         StatefulShellBranch(
           routes: <RouteBase>[
             GoRoute(
-              path: '/messages',
+              path: '/office',
               builder: (BuildContext context, GoRouterState state) =>
-                  const MessagesScreen(),
+                  const OfficeScreen(),
             ),
           ],
         ),
@@ -93,32 +95,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/children/:id',
       builder: (BuildContext context, GoRouterState state) =>
-          ChildDetailScreen(id: state.pathParameters['id'] ?? ''),
+          ChildHubScreen(archiveId: state.pathParameters['id'] ?? ''),
     ),
     GoRoute(
-      path: '/children/:id/assessments',
+      path: '/add-child',
       builder: (BuildContext context, GoRouterState state) =>
-          AssessmentTasksScreen(childId: state.pathParameters['id'] ?? ''),
-    ),
-    GoRoute(
-      path: '/assessment/:id',
-      builder: (BuildContext context, GoRouterState state) =>
-          AssessmentFormScreen(assessmentId: state.pathParameters['id'] ?? ''),
-    ),
-    GoRoute(
-      path: '/children/:id/iep',
-      builder: (BuildContext context, GoRouterState state) =>
-          IepGoalsScreen(childId: state.pathParameters['id'] ?? ''),
-    ),
-    GoRoute(
-      path: '/children/:id/training',
-      builder: (BuildContext context, GoRouterState state) =>
-          TrainingRecordScreen(childId: state.pathParameters['id'] ?? ''),
-    ),
-    GoRoute(
-      path: '/children/:id/guidance',
-      builder: (BuildContext context, GoRouterState state) =>
-          RehabGuidanceScreen(childId: state.pathParameters['id'] ?? ''),
+          const AddChildScreen(),
     ),
     GoRoute(
       path: '/clock-in',
@@ -172,6 +154,43 @@ final GoRouter appRouter = GoRouter(
         doc: state.pathParameters['doc'] ?? '',
         docId: state.uri.queryParameters['docId'],
       ),
+    ),
+    GoRoute(
+      path: '/rehab-autism/:id/items',
+      builder: (BuildContext context, GoRouterState state) =>
+          AutismItemsEditorScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        sourceId: int.tryParse(state.uri.queryParameters['sourceId'] ?? '0') ?? 0,
+      ),
+    ),
+    GoRoute(
+      path: '/rehab-autism/:id/charts',
+      builder: (BuildContext context, GoRouterState state) =>
+          AutismChartsScreen(archiveId: state.pathParameters['id'] ?? ''),
+    ),
+    GoRoute(
+      path: '/rehab-autism/:id/effect',
+      builder: (BuildContext context, GoRouterState state) =>
+          AutismEffectScreen(archiveId: state.pathParameters['id'] ?? ''),
+    ),
+    GoRoute(
+      path: '/rehab-autism/:id/monthly-plan-ai',
+      builder: (BuildContext context, GoRouterState state) =>
+          AutismMonthlyPlanAiScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+      ),
+    ),
+    GoRoute(
+      // IEP 干预计划（与月计划分开、独立创建）。
+      path: '/rehab-autism/:id/iep',
+      builder: (BuildContext context, GoRouterState state) =>
+          IepScreen(archiveId: state.pathParameters['id'] ?? ''),
+    ),
+    GoRoute(
+      // 添加 IEP 项目（独立页，从后端模板库按年龄/领域勾选）。
+      path: '/rehab-autism/:id/iep/add',
+      builder: (BuildContext context, GoRouterState state) =>
+          AddIepGoalScreen(archiveId: state.pathParameters['id'] ?? ''),
     ),
     GoRoute(
       path: '/rehab/:id/first-eval-edit',

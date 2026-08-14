@@ -1,8 +1,13 @@
 import 'package:geolocator/geolocator.dart';
+import 'package:teacher_app/core/api_client.dart';
+import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/clock_record.dart';
 import 'package:teacher_app/features/clock_in/domain/geo.dart';
+
+/// 后台「工作提示-员工打卡」对应的 oa_record 分类（与 OA 网页 oaRecordConfig.ts 一致）。
+const String _staffClockCategory = 'staff-clock';
 
 /// 签到数据层：定位、围栏距离计算、后端保存（预留）。
 class ClockInRepository {
@@ -49,18 +54,59 @@ class ClockInRepository {
     );
   }
 
-  /// 预留：签到记录保存至后端考勤接口。
-  /// 当前未接后端，仅作占位；接入时替换为带 JWT 的 POST 请求。
+  /// 签到记录保存至后台「工作提示-员工打卡」页（oa_record, category=staff-clock）。
+  ///
+  /// 该分类由 OA 网页 oaRecordConfig.ts 的 `staff-clock` 配置驱动，列表展示
+  /// [姓名 / 日期 / 上班时间 / 下班时间 / 状态]；本方法构造完全一致的 content，
+  /// 使 APP 打完卡后，后台该页面能立即新增一条记录。
   Future<void> saveRemote(ClockRecord record) async {
-    // TODO(backend): 接入 Spring Boot 考勤接口
-    // final resp = await http.post(
-    //   Uri.parse('${AppConstants.apiBaseUrl}${AppConstants.attendanceClockInPath}'),
-    //   headers: {'Authorization': 'Bearer <token>'},
-    //   body: jsonEncode(record.toJson()),
-    // );
-    // if (resp.statusCode != 200) throw ClockInException('保存失败');
-    return;
+    final String employee = AuthStore.instance.userName ?? '教师';
+
+    final Map<String, Object> content = <String, Object>{
+      'employee': employee,
+      'clockDate': _dateOf(record.time),
+      'statusLabel': _statusLabelOf(record),
+    };
+    if (record.type == ClockType.checkIn) {
+      content['onTime'] = _timeOf(record.time);
+    } else {
+      content['offTime'] = _timeOf(record.time);
+    }
+
+    final Map<String, dynamic> payload = <String, dynamic>{
+      'category': _staffClockCategory,
+      'recordTitle': employee,
+      'content': content,
+      'status': 2, // 已完成（与 staff-clock 默认状态一致）
+      'creatorName': employee,
+    };
+
+    try {
+      await apiClient.post('/api/oa/record', payload);
+    } on ApiException catch (e) {
+      // 透传后端业务错误，便于签到页给出明确提示。
+      throw ClockInException('打卡记录同步失败：${e.message}');
+    } catch (e) {
+      throw ClockInException('打卡记录同步失败：$e');
+    }
   }
+}
+
+/// yyyy-MM-dd
+String _dateOf(DateTime t) =>
+    '${t.year}-${_pad(t.month)}-${_pad(t.day)}';
+
+/// HH:mm
+String _timeOf(DateTime t) => '${_pad(t.hour)}:${_pad(t.minute)}';
+
+String _pad(int n) => n.toString().padLeft(2, '0');
+
+/// 上班晚于 09:00 记为「迟到」，下班早于 18:00 记为「早退」，其余「正常」。
+String _statusLabelOf(ClockRecord record) {
+  if (record.type == ClockType.checkIn) {
+    return record.time.hour >= 9 ? '迟到' : '正常';
+  }
+  return record.time.hour < 18 ? '早退' : '正常';
 }
 
 /// 签到相关异常（携带中文提示）。

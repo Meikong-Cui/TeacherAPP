@@ -6,8 +6,7 @@ class AppConstants {
   static const String brandName = '语亦丰康复';
 
   /// 后端基础地址（App 复用 OA 后台同一套 API）。
-  /// 当前指向腾讯云生产环境（nginx :8080 反向代理 /api 到 backend:8099）。
-  /// 本地模拟器调试请改回 'http://10.0.2.2:8099'；启用 HTTPS 后改用 'https://<域名或IP>'。
+  /// 指向生产环境公网后端（HTTP 明文；iOS 已在 Info.plist 配置 ATS 例外，Android 已允许明文流量）。
   static const String apiBaseUrl = 'http://62.234.141.250:8080';
 
   /// AI 教案生成接口路径（后端 oa-ai 模块已存在，角色门禁 TEACHER,PRINCIPAL）。

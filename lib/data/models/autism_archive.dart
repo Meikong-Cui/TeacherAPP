@@ -450,6 +450,8 @@ class AutismMonthlyPlan {
     this.musicWeek4 = '',
     this.teacherMusic = '',
     this.parentSignature = '',
+    this.aiBaseline = '',
+    this.editDiff = '',
     this.status = 0,
   });
 
@@ -497,6 +499,8 @@ class AutismMonthlyPlan {
   final String musicWeek4;
   final String teacherMusic;
   final String parentSignature;
+  final String aiBaseline;
+  final String editDiff;
   final int status;
 
   factory AutismMonthlyPlan.fromJson(Map<String, dynamic> j) => AutismMonthlyPlan(
@@ -544,6 +548,8 @@ class AutismMonthlyPlan {
         musicWeek4: _aStr(j['musicWeek4']),
         teacherMusic: _aStr(j['teacherMusic']),
         parentSignature: _aStr(j['parentSignature']),
+        aiBaseline: _aStr(j['aiBaseline']),
+        editDiff: _aStr(j['editDiff']),
         status: (j['status'] as int?) ?? 0,
       );
 
@@ -592,8 +598,34 @@ class AutismMonthlyPlan {
         'musicWeek4': musicWeek4,
         'teacherMusic': teacherMusic,
         'parentSignature': parentSignature,
+        'aiBaseline': aiBaseline,
+        'editDiff': editDiff,
         'status': status,
       };
+}
+
+/// ════════════════════════════════════════════════════════════════
+///  无 LLM 月计划生成结果（参考数据库最新 5 份组合相似内容）
+/// ════════════════════════════════════════════════════════════════
+class AutismMonthlyPlanGenerateResult {
+  AutismMonthlyPlanGenerateResult({
+    required this.success,
+    this.message,
+    this.plan,
+  });
+
+  final bool success;
+  final String? message;
+  final AutismMonthlyPlan? plan;
+
+  factory AutismMonthlyPlanGenerateResult.fromJson(Map<String, dynamic> j) =>
+      AutismMonthlyPlanGenerateResult(
+        success: (j['success'] as bool?) ?? false,
+        message: j['message']?.toString(),
+        plan: j['plan'] is Map<String, dynamic>
+            ? AutismMonthlyPlan.fromJson(j['plan'] as Map<String, dynamic>)
+            : null,
+      );
 }
 
 /// ════════════════════════════════════════════════════════════════

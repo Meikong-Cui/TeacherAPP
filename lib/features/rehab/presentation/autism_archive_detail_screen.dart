@@ -99,6 +99,20 @@ class _AutismArchiveDetailScreenState
                             docId: st.detail!.firstEval?.id),
                       ),
                       const SizedBox(height: 16),
+                      _EvalEntrySection(
+                        firstEvalId: st.detail!.firstEval?.id,
+                        onItems: () => context.push(
+                          '/rehab-autism/${widget.archiveId}/items'
+                          '?sourceId=${st.detail!.firstEval?.id ?? 0}',
+                        ),
+                        onCharts: () => context.push(
+                          '/rehab-autism/${widget.archiveId}/charts',
+                        ),
+                        onEffect: () => context.push(
+                          '/rehab-autism/${widget.archiveId}/effect',
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       _ListSection<AutismContEval>(
                         title: '持续评估',
                         items: st.detail!.contEvals,
@@ -134,6 +148,13 @@ class _AutismArchiveDetailScreenState
                         items: st.detail!.monthlyPlans,
                         emptyHint: '暂无月计划',
                         onAdd: () => _goEdit('monthly-plan'),
+                        aiAction: TextButton.icon(
+                          onPressed: () => context.push(
+                            '/rehab-autism/${widget.archiveId}/monthly-plan-ai',
+                          ),
+                          icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                          label: const Text('AI 生成'),
+                        ),
                         itemSubtitle: (e) => e.theme,
                         itemTitle: (e) => e.monthLabel,
                         onEdit: (e) => _goEdit('monthly-plan', docId: e.id),
@@ -313,6 +334,69 @@ class _FirstEvalSection extends StatelessWidget {
   }
 }
 
+/// 评估题目录入入口（逐题评分 + 图表 + 效果评估表）。
+class _EvalEntrySection extends StatelessWidget {
+  const _EvalEntrySection({
+    required this.firstEvalId,
+    required this.onItems,
+    required this.onCharts,
+    required this.onEffect,
+  });
+  final String? firstEvalId;
+  final VoidCallback onItems;
+  final VoidCallback onCharts;
+  final VoidCallback onEffect;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const AppSectionTitle('评估题目（逐题评分）'),
+            const SizedBox(height: 8),
+            const Text('将文档中每一道题按 P/E/F/X（情绪域 A/M/S）逐题录入，'
+                '并生成领域剖面图与 P 数折线图。'),
+            const SizedBox(height: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: onItems,
+                        icon: const Icon(Icons.edit_note),
+                        label: const Text('题目录入'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onCharts,
+                        icon: const Icon(Icons.pie_chart),
+                        label: const Text('评估图表'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: onEffect,
+                  icon: const Icon(Icons.insights),
+                  label: const Text('训练效果评估表（文档三）'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 通用列表区块（持续评估 / 学期计划 / 月计划 / 教案 / 家庭指导 / 效果登记）。
 class _ListSection<T> extends StatelessWidget {
   const _ListSection({
@@ -325,6 +409,7 @@ class _ListSection<T> extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     this.itemTitleOf,
+    this.aiAction,
   });
 
   final String title;
@@ -336,21 +421,25 @@ class _ListSection<T> extends StatelessWidget {
   final String Function(T) itemSubtitle;
   final ValueChanged<T> onEdit;
   final ValueChanged<T> onDelete;
+  final Widget? aiAction;
 
   @override
   Widget build(BuildContext context) {
+    final List<Widget> actions = <Widget>[
+      TextButton.icon(
+        onPressed: onAdd,
+        icon: const Icon(Icons.add, size: 18),
+        label: const Text('新增'),
+      ),
+      if (aiAction != null) aiAction!,
+    ];
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            AppSectionTitle(title,
-                action: TextButton.icon(
-                  onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('新增'),
-                )),
+            AppSectionTitle(title, action: Row(children: actions)),
             if (items.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),

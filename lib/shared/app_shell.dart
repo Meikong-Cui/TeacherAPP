@@ -8,9 +8,9 @@ class AppShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
   static const List<_Tab> _tabs = <_Tab>[
-    _Tab('首页', Icons.home_outlined, Icons.home, '/'),
+    _Tab('主页', Icons.home_outlined, Icons.home, '/'),
     _Tab('儿童', Icons.diversity_1_outlined, Icons.diversity_1_rounded, '/children'),
-    _Tab('消息', Icons.notifications_outlined, Icons.notifications, '/messages'),
+    _Tab('办公', Icons.work_outline_outlined, Icons.work_outline, '/office'),
     _Tab('我的', Icons.person_outline, Icons.person, '/profile'),
   ];
 

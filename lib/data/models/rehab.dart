@@ -108,6 +108,9 @@ class RehabArchive {
   /// 是否为孤独症档案（决定详情页走孤独症模板）。
   bool get isAutism => templateType.toUpperCase() == 'AUTISM';
 
+  /// 人类可读的特殊教育类型标签。
+  String get typeLabel => isAutism ? '孤独症' : '听障';
+
   factory RehabArchive.fromJson(Map<String, dynamic> j) => RehabArchive(
         id: j['id']?.toString() ?? '',
         archiveNo: (j['archiveNo'] as String?) ?? '',
@@ -119,6 +122,17 @@ class RehabArchive {
         createTime: _dt(j['createTime']),
         templateType: (j['templateType'] as String?) ?? '',
       );
+
+  /// 序列化（创建/更新档案用）。id 为空时不带上，由后端生成。
+  Map<String, dynamic> toJson() => <String, dynamic>{
+        if (id.isNotEmpty) 'id': id,
+        'archiveNo': archiveNo,
+        'childName': childName,
+        'campusName': campusName,
+        'status': status.code,
+        'templateType': templateType,
+        if (remark != null) 'remark': remark,
+      };
 }
 
 // ════════════════════════════════════════════════════════════════

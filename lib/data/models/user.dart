@@ -18,7 +18,7 @@ class TeacherUser {
     name: '林嘉怡',
     role: '康复教师',
     dept: '感知认知组',
-    center: '示范康复中心',
+    center: '呼兰校区',
     avatar: '林',
   );
 

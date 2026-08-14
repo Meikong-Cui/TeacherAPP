@@ -1,4 +1,4 @@
-/// 校区。打卡地点按校区配置（经纬度为占位示例坐标，真实环境由后台下发）。
+/// 校区。打卡地点按校区配置（经纬度为真实坐标，真实环境可由后台下发覆盖）。
 class Campus {
   const Campus({
     required this.id,
@@ -14,30 +14,23 @@ class Campus {
   final double latitude;
   final double longitude;
 
-  /// 默认示范康复中心打卡点（示例坐标：北京·朝阳）。
+  /// 默认打卡点（呼兰校区）。
   static const Campus defaultCampus = Campus(
     id: 1,
-    name: '示范康复中心',
+    name: '呼兰校区',
     isDefault: true,
-    latitude: 39.9219,
-    longitude: 116.4435,
+    latitude: 45.98555,
+    longitude: 126.599363,
   );
 
   static const List<Campus> all = <Campus>[
     defaultCampus,
     Campus(
       id: 2,
-      name: '东城校区',
+      name: '道里小区',
       isDefault: false,
-      latitude: 39.9096,
-      longitude: 116.4163,
-    ),
-    Campus(
-      id: 3,
-      name: '南城校区',
-      isDefault: false,
-      latitude: 39.8528,
-      longitude: 116.4074,
+      latitude: 45.732986,
+      longitude: 126.587281,
     ),
   ];
 }

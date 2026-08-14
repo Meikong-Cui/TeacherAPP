@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/core/constants.dart';
@@ -66,7 +67,7 @@ class ApiClient {
     return _unwrap(resp);
   }
 
-  Future<dynamic> post(String path, [Map<String, dynamic>? body]) async {
+  Future<dynamic> post(String path, [Object? body]) async {
     final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
     final http.Response resp = await _client.post(
       uri,
@@ -76,7 +77,7 @@ class ApiClient {
     return _unwrap(resp);
   }
 
-  Future<dynamic> put(String path, [Map<String, dynamic>? body]) async {
+  Future<dynamic> put(String path, [Object? body]) async {
     final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
     final http.Response resp = await _client.put(
       uri,
@@ -90,6 +91,27 @@ class ApiClient {
     final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
     final http.Response resp = await _client.delete(uri, headers: _headers());
     return _unwrap(resp);
+  }
+
+  /// 直接拉取二进制响应（用于 PDF 导出等不返回 JSON 的接口）。
+  /// 成功返回字节；非 2xx 抛出异常（尽量解析后端 `{msg}` 错误）。
+  Future<Uint8List> getBytes(String path) async {
+    final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
+    final http.Response resp =
+        await _client.get(uri, headers: _headers(json: false));
+    if (resp.statusCode >= 200 && resp.statusCode < 300) {
+      return resp.bodyBytes;
+    }
+    String msg = '下载失败（${resp.statusCode}）';
+    try {
+      final dynamic decoded = jsonDecode(resp.body);
+      if (decoded is Map<String, dynamic>) {
+        msg = (decoded['msg'] as String?) ?? msg;
+      }
+    } catch (_) {
+      // 非 JSON，保留默认信息
+    }
+    throw ApiException(msg, resp.statusCode);
   }
 }
 
