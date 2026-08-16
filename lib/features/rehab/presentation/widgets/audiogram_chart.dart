@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 
@@ -52,9 +51,9 @@ class _AudiogramChartState extends State<AudiogramChart> {
             style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
         if (widget.showBothEars || widget.editable)
           Row(mainAxisSize: MainAxisSize.min, children: [
-            _legend(Colors.red, '左耳'),
+            _legend(const Color(0xFF333333), '左耳 ◇×'),
             const SizedBox(width: 8),
-            _legend(Colors.blue, '右耳'),
+            _legend(const Color(0xFF333333), '右耳 ◇○'),
           ]),
       ]),
       const SizedBox(height: 8),
@@ -311,15 +310,15 @@ class _AudiogramPainter extends CustomPainter {
     canvas.drawRect(m.plotRect, axisPaint..style = PaintingStyle.stroke);
 
     // 折线
-    _drawLine(canvas, m, leftPoints, Colors.red);
-    _drawLine(canvas, m, rightPoints, Colors.blue);
+    _drawLine(canvas, m, leftPoints, const Color(0xFF333333));
+    _drawLine(canvas, m, rightPoints, const Color(0xFF333333));
 
-    // 点
+    // 点（临床菱形符号）
     for (final p in leftPoints) {
-      _drawPoint(canvas, m.xForFreq(p.freq), m.yForDb(p.db), Colors.red, '×');
+      _drawPoint(canvas, m.xForFreq(p.freq), m.yForDb(p.db), const Color(0xFF333333), 'L');
     }
     for (final p in rightPoints) {
-      _drawPoint(canvas, m.xForFreq(p.freq), m.yForDb(p.db), Colors.blue, '○');
+      _drawPoint(canvas, m.xForFreq(p.freq), m.yForDb(p.db), const Color(0xFF333333), 'R');
     }
 
     // 坐标轴标签
@@ -335,7 +334,7 @@ class _AudiogramPainter extends CustomPainter {
     if (points.length < 2) return;
     final Paint paint = Paint()
       ..color = color
-      ..strokeWidth = 2.0
+      ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke;
     final Path path = Path();
     bool first = true;
@@ -351,22 +350,31 @@ class _AudiogramPainter extends CustomPainter {
     canvas.drawPath(path, paint);
   }
 
-  void _drawPoint(Canvas canvas, double x, double y, Color color, String label) {
+  /// 绘制菱形符号（◇），左耳中间画 ×，右耳中间画 ○。
+  /// 与图表模板/hearing-test.html 中的临床符号一致。
+  void _drawPoint(Canvas canvas, double x, double y, Color color, String ear) {
     final Paint paint = Paint()
       ..color = color
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    canvas.drawCircle(Offset(x, y), 5, paint);
+      ..strokeWidth = 1.5;
 
-    final TextPainter tp = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    tp.layout();
-    tp.paint(canvas, Offset(x - tp.width / 2, y - 14));
+    // 菱形外框
+    final Path diamond = Path()
+      ..moveTo(x, y - 8)
+      ..lineTo(x + 6, y)
+      ..lineTo(x, y + 8)
+      ..lineTo(x - 6, y)
+      ..close();
+    canvas.drawPath(diamond, paint);
+
+    if (ear == 'L') {
+      // 左耳：菱形中间 ×
+      canvas.drawLine(Offset(x - 2.5, y - 3.2), Offset(x + 2.5, y + 3.2), paint);
+      canvas.drawLine(Offset(x - 2.5, y + 3.2), Offset(x + 2.5, y - 3.2), paint);
+    } else {
+      // 右耳：菱形中间 ○
+      canvas.drawCircle(Offset(x, y), 2.6, paint);
+    }
   }
 
   void _drawLabels(Canvas canvas, _ChartMetrics m) {

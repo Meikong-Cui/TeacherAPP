@@ -26,12 +26,14 @@ import 'package:teacher_app/features/seal/presentation/seal_list_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/iep_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/add_iep_goal_screen.dart';
 import 'package:teacher_app/core/auth_store.dart';
+import 'package:teacher_app/core/app_navigator.dart';
 import 'package:teacher_app/shared/app_shell.dart';
 
 /// 应用路由表。
 /// 底部 Tab（首页/儿童/消息/我的）走 StatefulShellRoute；
 /// 详情、签到、AI 教案为独立全屏页。
 final GoRouter appRouter = GoRouter(
+  navigatorKey: appNavigatorKey,
   initialLocation: '/login',
   redirect: (BuildContext context, GoRouterState state) {
     final bool loggedIn = AuthStore.instance.isLoggedIn;

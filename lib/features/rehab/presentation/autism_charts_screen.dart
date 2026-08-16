@@ -3,10 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/data/autism_questions.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/autism_line_chart.dart';
-import 'package:teacher_app/features/rehab/presentation/widgets/autism_pie_chart.dart';
+import 'package:teacher_app/features/rehab/presentation/widgets/development_profile_chart.dart';
+import 'package:teacher_app/features/rehab/presentation/widgets/emotion_ring_chart.dart';
 import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
+import 'package:teacher_app/features/rehab/services/chart_export.dart';
 
-/// 评估图表：领域发展剖面图 + 情绪行为表现图（可点选涂黑）+ P 数折线图。
+/// 评估图表：发展情况剖面图（竖线，可点选）+ 情绪行为表现图（同心圆环，可涂黑）+ P 数折线图。
 class AutismChartsScreen extends ConsumerStatefulWidget {
   const AutismChartsScreen({required this.archiveId, super.key});
   final String archiveId;
@@ -15,29 +17,26 @@ class AutismChartsScreen extends ConsumerStatefulWidget {
   ConsumerState<AutismChartsScreen> createState() => _AutismChartsScreenState();
 }
 
-const List<Color> _areaPalette = <Color>[
-  Color(0xFF5B8FF9),
-  Color(0xFF61DDAA),
-  Color(0xFF65789B),
-  Color(0xFFF6BD16),
-  Color(0xFF7262FD),
-  Color(0xFF78D3F8),
-  Color(0xFF9661BC),
-  Color(0xFFF6903D),
-];
-const List<Color> _emotionPalette = <Color>[
-  Color(0xFFE8684A),
-  Color(0xFFFF9D4D),
-  Color(0xFFF6BD16),
-  Color(0xFF5AD8A6),
-  Color(0xFF5B8FF9),
-  Color(0xFF9270CA),
+/// 折线图临床灰阶配色（与另两张黑白图风格统一）。
+const List<Color> _linePalette = <Color>[
+  Color(0xFF333333),
+  Color(0xFF555555),
+  Color(0xFF6E6E6E),
+  Color(0xFF888888),
+  Color(0xFF9E9E9E),
+  Color(0xFFB4B4B4),
+  Color(0xFF4A4A4A),
+  Color(0xFF7A7A7A),
 ];
 
 class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
-  final Set<int> _areaBlackout = <int>{};
-  final Set<int> _emotionBlackout = <int>{};
   final Set<String> _hiddenLines = <String>{};
+
+  /// 用于导出图表的 RepaintBoundary 键。
+  final GlobalKey _profileKey = GlobalKey();
+  final GlobalKey _emotionKey = GlobalKey();
+  final GlobalKey _lineKey = GlobalKey();
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -49,8 +48,7 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
     );
   }
 
-  /// 数据为空时构造一份「全 0」统计，使图表（剖面图 + 折线图）仍能正常渲染，
-  /// 方便在没有录入数据的情况下预览图表版式。
+  /// 数据为空时构造一份「全 0」统计，使折线图仍能正常渲染。
   AutismEvalStats _emptyStats() {
     final List<EvalAreaProfile> p8 = autismQuestionAreas
         .map((a) => EvalAreaProfile(
@@ -100,45 +98,12 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
     );
   }
 
-  List<AutismPieSlice> _areaSlices(AutismEvalStats stats) {
-    final Map<String, int> paletteIdx = <String, int>{};
-    for (int i = 0; i < autismAreaKeys.length; i++) {
-      paletteIdx[autismAreaKeys[i]] = i;
-    }
-    return stats.profile8.map((p) {
-      final int idx = paletteIdx[p.areaKey] ?? 0;
-      return AutismPieSlice(
-        label: p.areaLabel,
-        pCount: p.pCount,
-        total: p.total,
-        color: _areaPalette[idx % _areaPalette.length],
-      );
-    }).toList();
-  }
-
-  List<AutismPieSlice> _emotionSlices(AutismEvalStats stats) {
-    return stats.profileEmotion.map((p) {
-      final int idx =
-          autismEmotionDims.indexOf(p.dimKey).clamp(0, _emotionPalette.length - 1);
-      return AutismPieSlice(
-        label: p.dimLabel,
-        pCount: p.pCount,
-        total: p.total,
-        color: _emotionPalette[idx],
-      );
-    }).toList();
-  }
-
-  int _areaTotalP(AutismEvalStats stats) =>
-      stats.profile8.fold(0, (s, e) => s + e.pCount);
-
   @override
   Widget build(BuildContext context) {
     final AutismEvalStatsState st =
         ref.watch(autismEvalStatsProvider('${widget.archiveId}|FIRST'));
     final AutismEvalStats? raw = st.stats;
     final bool empty = raw == null || raw.evalSeqs.isEmpty;
-    // 数据为空时渲染空白图表（而非仅显示文字），以便预览版式。
     final AutismEvalStats stats = empty ? _emptyStats() : raw;
 
     ref.listen<AutismEvalStatsState>(
@@ -150,7 +115,60 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
     });
 
     return Scaffold(
-      appBar: AppBar(title: const Text('评估图表')),
+      appBar: AppBar(
+        title: const Text('评估图表'),
+        actions: <Widget>[
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.ios_share),
+            tooltip: '导出图表',
+            onSelected: (String chart) async {
+              if (_exporting) return;
+              setState(() => _exporting = true);
+              try {
+                final GlobalKey key;
+                final String title;
+                switch (chart) {
+                  case 'profile':
+                    key = _profileKey;
+                    title = '孤独症儿童发展情况剖面图';
+                    break;
+                  case 'emotion':
+                    key = _emotionKey;
+                    title = '孤独症儿童情绪行为表现图';
+                    break;
+                  case 'line':
+                    key = _lineKey;
+                    title = 'P数折线图';
+                    break;
+                  default:
+                    return;
+                }
+                await exportBoundaryToPdf(
+                  key,
+                  filename: '$title.pdf',
+                  title: title,
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('导出失败: $e')),
+                  );
+                }
+              } finally {
+                if (mounted) setState(() => _exporting = false);
+              }
+            },
+            itemBuilder: (_) => const <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                  value: 'profile', child: Text('导出 发展情况剖面图 (PDF)')),
+              PopupMenuItem<String>(
+                  value: 'emotion', child: Text('导出 情绪行为表现图 (PDF)')),
+              PopupMenuItem<String>(
+                  value: 'line', child: Text('导出 P数折线图 (PDF)')),
+            ],
+          ),
+        ],
+      ),
       body: st.loading && raw == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -159,8 +177,8 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
                 if (empty)
                   Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding:
-                        const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 8, horizontal: 12),
                     decoration: BoxDecoration(
                       color: Colors.amber.shade50,
                       borderRadius: BorderRadius.circular(8),
@@ -168,13 +186,15 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
                     ),
                     child: const Row(
                       children: <Widget>[
-                        Icon(Icons.info_outline, size: 16, color: Colors.amber),
+                        Icon(Icons.info_outline,
+                            size: 16, color: Colors.amber),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            '暂无评估数据，以下为空白图表占位。'
-                            '请先在「评估题目录入」中填写题目后保存。',
-                            style: TextStyle(fontSize: 12, color: Colors.amber),
+                            '暂无评估数据，折线图为空白占位；'
+                            '上方两张图可直接在屏幕上点选填写。',
+                            style:
+                                TextStyle(fontSize: 12, color: Colors.amber),
                           ),
                         ),
                       ],
@@ -184,22 +204,21 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        const Text('领域发展剖面图（首次评估）',
+                        const Text('发展情况剖面图（首次评估）',
                             style: TextStyle(
                                 fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        AutismPieChart(
-                          slices: _areaSlices(stats),
-                          blackout: _areaBlackout,
-                          onTapSlice: (i) => setState(() => _areaBlackout.contains(i)
-                              ? _areaBlackout.remove(i)
-                              : _areaBlackout.add(i)),
-                          centerText: 'P ${_areaTotalP(stats)}',
+                        RepaintBoundary(
+                          key: _profileKey,
+                          child: Container(
+                            color: Colors.white,
+                            child: const DevelopmentProfileChart(
+                              editable: true,
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text('点击扇区可标记为「重点缺陷域」（涂黑）',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
                       ],
                     ),
                   ),
@@ -209,24 +228,21 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        const Text('情绪与行为表现图',
+                        const Text('情绪行为表现图',
                             style: TextStyle(
                                 fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 8),
-                        AutismPieChart(
-                          slices: _emotionSlices(stats),
-                          blackout: _emotionBlackout,
-                          onTapSlice: (i) => setState(() => _emotionBlackout.contains(i)
-                              ? _emotionBlackout.remove(i)
-                              : _emotionBlackout.add(i)),
-                          centerText:
-                              'P ${stats.profileEmotion.fold(0, (s, e) => s + e.pCount)}',
-                          size: 240,
+                        RepaintBoundary(
+                          key: _emotionKey,
+                          child: Container(
+                            color: Colors.white,
+                            child: const EmotionRingChart(
+                              editable: true,
+                            ),
+                          ),
                         ),
-                        const SizedBox(height: 6),
-                        const Text('点击扇区可标记为「重点缺陷域」（涂黑）',
-                            style: TextStyle(fontSize: 12, color: Colors.grey)),
                       ],
                     ),
                   ),
@@ -250,12 +266,18 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
                               : _hiddenLines.add(k)),
                         ),
                         const SizedBox(height: 8),
-                        AutismLineChart(
-                          xLabels: stats.evalSeqs
-                              .map((s) => '第${s}次')
-                              .toList(),
-                          series: _buildSeries(stats),
-                          height: 280,
+                        RepaintBoundary(
+                          key: _lineKey,
+                          child: Container(
+                            color: Colors.white,
+                            child: AutismLineChart(
+                              xLabels: stats.evalSeqs
+                                  .map((s) => '第$s次')
+                                  .toList(),
+                              series: _buildSeries(stats),
+                              height: 280,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -268,19 +290,16 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
 
   List<AutismLineSeries> _buildSeries(AutismEvalStats stats) {
     final List<AutismLineSeries> out = <AutismLineSeries>[];
-    // 全部题目总 P 数
+    // 全部题目总 P 数（黑色主线）
     if (!_hiddenLines.contains('全部题目')) {
       out.add(AutismLineSeries(
         label: '全部题目',
-        color: const Color(0xFF7C5CF0),
+        color: Colors.black,
         values: stats.totalPSeries().cast<num>(),
       ));
     }
-    final Map<String, int> paletteIdx = <String, int>{};
-    for (int i = 0; i < autismAreaKeys.length; i++) {
-      paletteIdx[autismAreaKeys[i]] = i;
-    }
-    for (final EvalAreaSeries a in stats.areaSeries) {
+    for (int i = 0; i < stats.areaSeries.length; i++) {
+      final EvalAreaSeries a = stats.areaSeries[i];
       if (_hiddenLines.contains(a.areaKey)) continue;
       final List<num> vals = <num>[
         for (final int seq in stats.evalSeqs)
@@ -290,7 +309,7 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
       ];
       out.add(AutismLineSeries(
         label: a.areaLabel,
-        color: _areaPalette[(paletteIdx[a.areaKey] ?? 0) % _areaPalette.length],
+        color: _linePalette[i % _linePalette.length],
         values: vals,
       ));
     }
@@ -312,13 +331,15 @@ class _LineLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<_LegendItem> items = <_LegendItem>[
-      const _LegendItem(key: '全部题目', label: '全部题目', color: Color(0xFF7C5CF0)),
+      const _LegendItem(key: '全部题目', label: '全部题目', color: Colors.black),
     ];
-    for (final EvalAreaSeries a in stats.areaSeries) {
-      final int idx =
-          autismAreaKeys.indexOf(a.areaKey).clamp(0, _areaPalette.length - 1);
+    for (int i = 0; i < stats.areaSeries.length; i++) {
+      final EvalAreaSeries a = stats.areaSeries[i];
       items.add(_LegendItem(
-          key: a.areaKey, label: a.areaLabel, color: _areaPalette[idx]));
+        key: a.areaKey,
+        label: a.areaLabel,
+        color: _linePalette[i % _linePalette.length],
+      ));
     }
     return Wrap(
       spacing: 6,
@@ -327,7 +348,7 @@ class _LineLegend extends StatelessWidget {
           .map((it) => FilterChip(
                 label: Text(it.label, style: const TextStyle(fontSize: 12)),
                 selected: !hidden.contains(it.key),
-                selectedColor: it.color.withAlpha(60),
+                selectedColor: it.color.withAlpha(40),
                 onSelected: (_) => onToggle(it.key),
               ))
           .toList(),

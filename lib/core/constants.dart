@@ -6,8 +6,17 @@ class AppConstants {
   static const String brandName = '语亦丰康复';
 
   /// 后端基础地址（App 复用 OA 后台同一套 API）。
-  /// 指向生产环境公网后端（HTTP 明文；iOS 已在 Info.plist 配置 ATS 例外，Android 已允许明文流量）。
-  static const String apiBaseUrl = 'http://62.234.141.250:8080';
+  ///
+  /// 编译开关：默认指向生产环境公网后端（HTTP 明文；iOS 已在 Info.plist 配置 ATS 例外，
+  /// Android 已 usesCleartextTraffic=true 允许明文流量，无 IP 白名单限制）。
+  /// 本地联调时通过编译参数覆盖，无需改动源码：
+  ///   flutter build apk --dart-define=API_BASE_URL=http://<本机IP>:8099
+  ///   flutter run      --dart-define=API_BASE_URL=http://10.0.2.2:8099   (安卓模拟器)
+  /// Android Studio：Run → Edit Configurations → 选中 main.dart →
+  ///   “Additional run args” 填入 --dart-define=API_BASE_URL=http://192.168.x.x:8099
+  /// 未传参即连生产环境，默认值保持不变。
+  static const String apiBaseUrl =
+      String.fromEnvironment('API_BASE_URL', defaultValue: 'http://62.234.141.250:8080');
 
   /// AI 教案生成接口路径（后端 oa-ai 模块已存在，角色门禁 TEACHER,PRINCIPAL）。
   /// 当前为预留接口，AI 能力后续接入 DeepSeek。

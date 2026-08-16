@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +5,7 @@ import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/audiogram_chart.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 import 'package:teacher_app/features/rehab/services/hearing_record_pdf.dart';
+import 'package:teacher_app/features/rehab/services/chart_export.dart';
 
 /// 听能管理记录 Tab（位于教学计划右侧）。
 class HearingRecordTab extends ConsumerStatefulWidget {
@@ -19,6 +19,9 @@ class HearingRecordTab extends ConsumerStatefulWidget {
 class _HearingRecordTabState extends ConsumerState<HearingRecordTab> {
   RehabHearingRecord? _draft;
   bool _isEditing = false;
+
+  /// 听力图导出用的边界键（按记录 ID 区分）。
+  final Map<String, GlobalKey> _audiogramKeys = <String, GlobalKey>{};
 
   @override
   Widget build(BuildContext context) {
@@ -83,8 +86,29 @@ class _HearingRecordTabState extends ConsumerState<HearingRecordTab> {
             Row(mainAxisSize: MainAxisSize.min, children: [
               IconButton(
                 icon: const Icon(Icons.picture_as_pdf, size: 20),
-                tooltip: '导出 PDF',
+                tooltip: '导出记录 PDF',
                 onPressed: () => exportHearingRecordToPdf(r),
+              ),
+              IconButton(
+                icon: const Icon(Icons.image, size: 20),
+                tooltip: '导出听力图',
+                onPressed: () async {
+                  final GlobalKey? key = _audiogramKeys[r.id];
+                  if (key == null) return;
+                  try {
+                    await exportBoundaryToPdf(
+                      key,
+                      filename: '听力图_${r.name ?? ""}.pdf',
+                      title: '听力测试（助听听阈）',
+                    );
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('导出失败: $e')),
+                      );
+                    }
+                  }
+                },
               ),
               IconButton(
                 icon: const Icon(Icons.edit, size: 20),
@@ -107,10 +131,16 @@ class _HearingRecordTabState extends ConsumerState<HearingRecordTab> {
           _infoRow('出生年月', fmt(r.birthDate)),
           _infoRow('评估人员', r.evaluatorName ?? ''),
           const SizedBox(height: 8),
-          AudiogramChart(
-            leftPoints: r.leftAudiogram,
-            rightPoints: r.rightAudiogram,
-            editable: false,
+          RepaintBoundary(
+            key: _audiogramKeys.putIfAbsent(r.id, () => GlobalKey()),
+            child: Container(
+              color: Colors.white,
+              child: AudiogramChart(
+                leftPoints: r.leftAudiogram,
+                rightPoints: r.rightAudiogram,
+                editable: false,
+              ),
+            ),
           ),
         ]),
       ),

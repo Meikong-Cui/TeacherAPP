@@ -1,18 +1,44 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:teacher_app/core/notification_service.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 import 'package:teacher_app/shared/ui.dart';
 import 'package:teacher_app/data/providers.dart';
 
 /// 主页：教师仪表盘。儿童相关入口集中于此；办公类入口移至「办公」页。
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  Timer? _noticeTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // 启动后立即拉取一次通知/预警，并周期性轮询
+    NotificationService.pollNotices();
+    _noticeTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      NotificationService.pollNotices();
+    });
+  }
+
+  @override
+  void dispose() {
+    _noticeTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final TeacherUser user = ref.watch(currentUserProvider);
     final AsyncValue<List<RehabArchive>> archivesAsync =
         ref.watch(rehabArchivesProvider);

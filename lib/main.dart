@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_app/app/router.dart';
 import 'package:teacher_app/app/theme.dart';
+import 'package:teacher_app/core/app_navigator.dart';
 import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/core/notification_service.dart';
 import 'package:teacher_app/core/theme_mode_notifier.dart';
+import 'package:teacher_app/features/notice/data/notice_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await AuthStore.instance.load();
   await NotificationService.init();
+  NotificationService.setNoticeRepository(NoticeRepository());
   runApp(const ProviderScope(child: TeacherApp()));
 }
 

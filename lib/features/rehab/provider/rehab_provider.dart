@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_app/core/notification_service.dart';
 import 'package:teacher_app/data/models/rehab.dart';
+import 'package:teacher_app/data/providers.dart';
 import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
 
 final Provider<RehabRepository> rehabRepositoryProvider =
@@ -251,14 +252,17 @@ final StateNotifierProviderFamily<RehabArchiveDetailNotifier,
 );
 
 /// 待办任务（首页/任务页使用）。
-final FutureProvider<List<RehabTask>> pendingTasksProvider =
-    FutureProvider<List<RehabTask>>(
-  (ref) => ref.watch(rehabRepositoryProvider).pendingTasks(),
-);
+final pendingTasksProvider =
+    FutureProvider.autoDispose<List<RehabTask>>((ref) {
+  ref.watch(authChangedProvider);
+  return ref.watch(rehabRepositoryProvider).pendingTasks();
+});
 
 /// 康复档案列表（首页"今日儿童"使用，从后端真实拉取）。
-final FutureProvider<List<RehabArchive>> rehabArchivesProvider =
-    FutureProvider<List<RehabArchive>>((ref) {
+/// 依赖 [authChangedProvider]：登录成功 / 登出后自动重算，避免旧 token 的 403 被永久缓存。
+final rehabArchivesProvider =
+    FutureProvider.autoDispose<List<RehabArchive>>((ref) {
+      ref.watch(authChangedProvider);
       final repo = ref.watch(rehabRepositoryProvider);
       return repo.listArchives(keyword: '', current: 1, size: 50);
     });

@@ -36,3 +36,8 @@ final messagesProvider = Provider<List<AppMessage>>((ref) => MockData.messages);
 
 /// 家庭指导详情。
 final guidanceProvider = Provider<Guidance>((ref) => MockData.guidance);
+
+/// 登录态变化信号。登录成功 / 登出时自增，
+/// 真实数据类 Provider（康复档案列表、待办等）通过 watch 它来自动重算，
+/// 避免缓存「旧 token 匿名请求」导致的 403 错误长期不消失。
+final authChangedProvider = StateProvider<int>((ref) => 0);

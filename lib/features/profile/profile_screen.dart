@@ -125,6 +125,7 @@ class ProfileScreen extends ConsumerWidget {
             child: OutlinedButton(
               onPressed: () async {
                 await const AuthRepository().logout();
+                ref.read(authChangedProvider.notifier).state++;
                 if (context.mounted) context.go('/login');
               },
               child: const Text('退出登录'),

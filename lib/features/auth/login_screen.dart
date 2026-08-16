@@ -41,6 +41,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ref.read(currentUserProvider.notifier).state =
             ref.read(currentUserProvider).copyWith(name: name);
       }
+      ref.read(authChangedProvider.notifier).state++;
       context.go('/');
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);

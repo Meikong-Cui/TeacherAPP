@@ -24,7 +24,20 @@ class ChildrenListScreen extends ConsumerWidget {
       ),
       body: archivesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('加载失败：$e')),
+        error: (e, _) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              Text('加载失败：$e'),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: () => ref.invalidate(rehabArchivesProvider),
+                icon: const Icon(Icons.refresh),
+                label: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
         data: (archives) => archives.isEmpty
             ? Center(
                 child: Column(
