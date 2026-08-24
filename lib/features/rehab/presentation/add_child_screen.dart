@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/data/models/rehab.dart';
+import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 import 'package:teacher_app/shared/ui.dart';
 
@@ -28,6 +30,8 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
   DateTime? _birthDate;
   DateTime? _enrollDate;
   String _templateType = 'HEARING'; // HEARING / AUTISM
+  /// 孤独症档案的评测量表：STANDARD（残联标准）/ OFFLINE（线下模板）/ VB，三套相互独立。
+  String _evalFormCode = 'STANDARD';
   bool _submitting = false;
 
   @override
@@ -67,6 +71,8 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
         templateType: _templateType,
         status: ArchiveStatus.draft,
         campusName: '',
+        // 听障档案不使用孤独症量表，统一回落 STANDARD 由后端忽略。
+        evalFormCode: _templateType == 'AUTISM' ? _evalFormCode : 'STANDARD',
       );
       final String id =
           await ref.read(rehabRepositoryProvider).createArchive(archive);
@@ -92,6 +98,22 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    // 量表清单来自后端 /api/rehab/autism/forms；加载中或异常时用内置三套兜底，
+    // 保证「新建孤独症儿童」始终能看到三套可选模板。
+    final AsyncValue<List<AutismEvalForm>> formsAsync =
+        ref.watch(evalFormsProvider);
+    final List<_FormOption> formOptions = formsAsync.maybeWhen(
+      data: (List<AutismEvalForm> list) => list.isEmpty
+          ? _builtinForms
+          : list
+              .map((AutismEvalForm f) => _FormOption(
+                    f.formCode,
+                    f.formName.isEmpty ? f.formCode : f.formName,
+                    (f.description ?? '').trim(),
+                  ))
+              .toList(),
+      orElse: () => _builtinForms,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -216,29 +238,73 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
               index: 3,
               title: '选择特殊教育类型',
               subtitle: '将按类型创建对应的评估与干预模板',
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Expanded(
-                    child: _TypeChoice(
-                      selected: _templateType == 'HEARING',
-                      title: '听障',
-                      desc: '听能管理 / 听觉语言评估',
-                      icon: Icons.hearing_outlined,
-                      color: iconColor('green'),
-                      onTap: () => setState(() => _templateType = 'HEARING'),
-                    ),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: _TypeChoice(
+                          selected: _templateType == 'HEARING',
+                          title: '听障',
+                          desc: '听能管理 / 听觉语言评估',
+                          icon: Icons.hearing_outlined,
+                          color: iconColor('green'),
+                          onTap: () => setState(() => _templateType = 'HEARING'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _TypeChoice(
+                          selected: _templateType == 'AUTISM',
+                          title: '孤独症',
+                          desc: '八大领域评估 / IEP',
+                          icon: Icons.psychology_outlined,
+                          color: iconColor('rose'),
+                          onTap: () => setState(() => _templateType = 'AUTISM'),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _TypeChoice(
-                      selected: _templateType == 'AUTISM',
-                      title: '孤独症',
-                      desc: '八大领域评估 / IEP',
-                      icon: Icons.psychology_outlined,
-                      color: iconColor('rose'),
-                      onTap: () => setState(() => _templateType = 'AUTISM'),
+                  if (_templateType == 'AUTISM') ...<Widget>[
+                    const SizedBox(height: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: <Widget>[
+                        Text(
+                          '选择评测量表',
+                          style: textTheme.titleSmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 8),
+                        if (formsAsync.isLoading)
+                          const SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                      ],
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '三套量表相互独立，请按儿童实际情况选择；建档后仍可在档案的「评测量表」页切换。',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    for (final _FormOption o in formOptions)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _FormChoice(
+                          selected: _evalFormCode == o.code,
+                          title: o.name,
+                          desc: o.desc,
+                          onTap: () => setState(() => _evalFormCode = o.code),
+                        ),
+                      ),
+                  ],
                 ],
               ),
             ),
@@ -321,6 +387,90 @@ class _StepCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 量表候选项（后端 /forms 未就绪时的展示兜底）。
+class _FormOption {
+  const _FormOption(this.code, this.name, this.desc);
+  final String code;
+  final String name;
+  final String desc;
+}
+
+/// 内置三套量表：与后端 autism_eval_form 种子保持一致。
+const List<_FormOption> _builtinForms = <_FormOption>[
+  _FormOption('STANDARD', '残联标准',
+      '8 大领域 + 情绪与行为共 493 题；普通领域 P/E/F/X，情绪行为 A/M/S。'),
+  _FormOption('OFFLINE', '线下模板评估',
+      '适用于线下 A/B 卷评估；老师用纸质题本评估后录入题号对应选项。'),
+  _FormOption('VB', 'VB（言语行为评估）',
+      '含总项目 / 子项目层级结构；按 P（通过）/ A（辅助）评级。'),
+];
+
+/// 量表单选行：与 [_TypeChoice] 同一视觉语言，改为纵向列表以容纳说明文字。
+class _FormChoice extends StatelessWidget {
+  const _FormChoice({
+    required this.selected,
+    required this.title,
+    required this.desc,
+    required this.onTap,
+  });
+  final bool selected;
+  final String title;
+  final String desc;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? colors.primary : colors.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+          color: selected ? colors.primaryContainer : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              selected ? Icons.radio_button_checked : Icons.radio_button_off,
+              size: 20,
+              color: selected ? colors.primary : colors.onSurfaceVariant,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    title,
+                    style: textTheme.bodyLarge
+                        ?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  if (desc.isNotEmpty) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Text(
+                      desc,
+                      style: textTheme.bodySmall
+                          ?.copyWith(color: colors.onSurfaceVariant),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),

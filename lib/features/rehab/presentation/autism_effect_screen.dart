@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/data/autism_questions.dart';
-import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
+import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 /// 训练效果评估表（文档三）。
 ///
-/// 与「评估题目录入（文档一）」使用同一套题目（[autismQuestionAreas]），
-/// 直接读取已保存的逐题评分数据填充：
-///  - 「训练项目」列：该题在对应评估次数下是否有评分记录（已评=✓）。
-///  - 「训练效果」列：相邻两次评估对比得到 显效 / 有效 / 无效（无对比则 —）。
+/// 数据来源改为「评估轮次（round）」下逐题评分：[AutismEvalItem]。
+///  - STANDARD：复用本地 8 领域题项（[autismQuestionAreas]），按相邻两次评估
+///    对比得到 显效 / 有效 / 无效。
+///  - OFFLINE / VB：无 P/E/F/X 模型，展示各轮次逐题评分清单。
 /// 纯展示界面，不可编辑。
 class AutismEffectScreen extends ConsumerStatefulWidget {
   const AutismEffectScreen({required this.archiveId, super.key});
@@ -19,17 +20,97 @@ class AutismEffectScreen extends ConsumerStatefulWidget {
 }
 
 class _AutismEffectScreenState extends ConsumerState<AutismEffectScreen> {
-  /// "$areaKey|$itemCode" -> { evalSeq: 评级 }
-  final Map<String, Map<int, String>> _values = <String, Map<int, String>>{};
+  String _formCode = '';
+  List<AutismEvalRound> _rounds = <AutismEvalRound>[];
+  final Map<String, List<AutismEvalItem>> _itemsByRound =
+      <String, List<AutismEvalItem>>{};
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () => ref
-          .read(autismEvalItemsProvider('${widget.archiveId}|FIRST').notifier)
-          .load(),
-    );
+    Future.microtask(_load);
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final repo = ref.read(rehabRepositoryProvider);
+      String fc = 'STANDARD';
+      try {
+        final detail = await repo.getArchive(widget.archiveId);
+        fc = detail.archive.evalFormCode;
+      } catch (_) {
+        fc = 'STANDARD';
+      }
+      if (!mounted) return;
+      _formCode = fc;
+
+      final rounds = await repo.listEvalRounds(widget.archiveId, _formCode);
+      final Map<String, List<AutismEvalItem>> itemsByRound =
+          <String, List<AutismEvalItem>>{};
+      for (final r in rounds) {
+        if (r.id == null) continue;
+        try {
+          itemsByRound[r.id.toString()] =
+              await repo.listRoundItems(r.id.toString());
+        } catch (_) {
+          itemsByRound[r.id.toString()] = const <AutismEvalItem>[];
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _rounds = rounds;
+        _itemsByRound
+          ..clear()
+          ..addAll(itemsByRound);
+        _loading = false;
+        _error = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '加载失败：$e';
+        });
+      }
+    }
+  }
+
+  /// roundId -> 评估序号（缺省用下标+1）。
+  Map<String, int> get _roundSeq {
+    final Map<String, int> m = <String, int>{};
+    for (int i = 0; i < _rounds.length; i++) {
+      final r = _rounds[i];
+      if (r.id != null) m[r.id.toString()] = r.evalSeq ?? (i + 1);
+    }
+    return m;
+  }
+
+  /// "$areaKey|$itemCode" -> { evalSeq: 评级 }
+  Map<String, Map<int, String>> get _values {
+    final Map<String, Map<int, String>> v = <String, Map<int, String>>{};
+    final Map<String, int> seq = _roundSeq;
+    for (final r in _rounds) {
+      if (r.id == null) continue;
+      final int s = seq[r.id.toString()]!;
+      for (final it in _itemsByRound[r.id.toString()] ?? <AutismEvalItem>[]) {
+        if (it.rating == null || it.rating!.isEmpty) continue;
+        v.putIfAbsent('${it.areaKey}|${it.itemCode}',
+            () => <int, String>{})[s] = it.rating!;
+      }
+    }
+    return v;
+  }
+
+  List<int> get _seqs {
+    final Set<int> seqSet = <int>{};
+    for (final m in _values.values) {
+      seqSet.addAll(m.keys);
+    }
+    final List<int> seqs = seqSet.toList()..sort();
+    return seqs;
   }
 
   String? _effectOf(String? before, String? after, bool isEmotion) {
@@ -101,58 +182,108 @@ class _AutismEffectScreenState extends ConsumerState<AutismEffectScreen> {
     return '${parts.join('，')}　总体评价：$overall';
   }
 
+  /// OFFLINE / VB 等量表：逐轮次展示题项评分清单。
+  List<Widget> _buildGeneric() {
+    final List<Widget> out = <Widget>[];
+    final Map<String, int> seq = _roundSeq;
+    for (final r in _rounds) {
+      if (r.id == null) continue;
+      final int s = seq[r.id.toString()]!;
+      final items = _itemsByRound[r.id.toString()] ?? <AutismEvalItem>[];
+      out.add(Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: ExpansionTile(
+          initiallyExpanded: out.isEmpty,
+          title: Text('第$s次评估'),
+          subtitle: Text('${items.length} 题'),
+          children: items.isEmpty
+              ? const <Widget>[
+                  Padding(
+                    padding: EdgeInsets.all(12),
+                    child: Text('本次评估暂无评分。'),
+                  )
+                ]
+              : items
+                  .map((it) => ListTile(
+                        dense: true,
+                        title: Text(it.itemName,
+                            style: const TextStyle(fontSize: 13)),
+                        trailing: Text(
+                          it.optionLabel?.isNotEmpty == true
+                              ? it.optionLabel!
+                              : (it.rating ?? '—'),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ))
+                  .toList(),
+        ),
+      ));
+    }
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final state =
-        ref.watch(autismEvalItemsProvider('${widget.archiveId}|FIRST'));
-
-    ref.listen(autismEvalItemsProvider('${widget.archiveId}|FIRST'), (_, next) {
-      if (next.error != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(next.error!)));
-      }
-    });
-
-    // 重新构建查找表
-    _values.clear();
-    for (final it in state.items) {
-      _values
-          .putIfAbsent('${it.areaKey}|${it.itemCode}',
-              () => <int, String>{})[it.evalSeq] = it.value ?? '';
+    if (_loading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('训练效果评估表（文档三）')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
-    final Set<int> seqSet = <int>{};
-    for (final m in _values.values) {
-      seqSet.addAll(m.keys);
+    if (_error != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('训练效果评估表（文档三）')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(_error!),
+          ),
+        ),
+      );
     }
-    final List<int> seqs = seqSet.toList()..sort();
+
+    final bool isStandard = _formCode == 'STANDARD';
+    final List<int> seqs = _seqs;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('训练效果评估表（文档三）')),
-      body: state.loading && state.items.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(12),
-              children: <Widget>[
-                Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.shade100),
-                  ),
-                  child: const Text(
-                    '效果判定：训练前「中间项(E)」训练后「通过(P)」为显效；'
-                    '训练前「未通过(F)」训练后「中间项(E)」为有效；无变化为无效。'
-                    '（情绪域：M/S→A 为显效，S→M 为有效）',
-                    style: TextStyle(fontSize: 12, color: Colors.blue),
-                  ),
-                ),
-                ...autismQuestionAreas.map((a) => _buildArea(a, seqs)).toList(),
-                const SizedBox(height: 12),
-              ],
+      appBar: AppBar(
+        title: const Text('训练效果评估表（文档三）'),
+        actions: <Widget>[
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: '刷新',
+            onPressed: _load,
+          ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(12),
+        children: <Widget>[
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding:
+                const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.blue.shade100),
             ),
+            child: Text(
+              isStandard
+                  ? '效果判定：训练前「中间项(E)」训练后「通过(P)」为显效；'
+                      '训练前「未通过(F)」训练后「中间项(E)」为有效；无变化为无效。'
+                      '（情绪域：M/S→A 为显效，S→M 为有效）'
+                  : '当前量表（$_formCode）逐次评估的题项评分清单。',
+              style: const TextStyle(fontSize: 12, color: Colors.blue),
+            ),
+          ),
+          if (isStandard)
+            ...autismQuestionAreas.map((a) => _buildArea(a, seqs)).toList()
+          else
+            ..._buildGeneric(),
+          const SizedBox(height: 12),
+        ],
+      ),
     );
   }
 }

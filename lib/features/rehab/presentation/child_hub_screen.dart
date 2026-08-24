@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_app/data/models/autism_archive.dart';
 import 'package:teacher_app/data/models/rehab.dart';
+import 'package:teacher_app/features/rehab/presentation/widgets/child_timeline.dart';
 import 'package:teacher_app/features/rehab/provider/autism_provider.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 import 'package:teacher_app/shared/ui.dart';
@@ -145,7 +146,23 @@ class ChildHubScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
 
-          // 即将上课 / 最新计划（置顶区）
+          // 功能入口（按类型分支）— 已提到评估历史之上。
+          AppSectionTitle('功能入口'),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            // 6 张卡片（3 行 × 2 列）时保持卡片方正；4 张时仍合适。
+            childAspectRatio: 1.25,
+            children: _entries(isAutism, archiveId)
+                .map((e) => _HubEntryCard(entry: e))
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+
+          // 即将上课 / 最新计划（挪到功能入口之下，符合「先做事再排程」的次序）。
           AppSectionTitle('即将上课 / 最新计划'),
           if (plans.isEmpty)
             Card(
@@ -163,22 +180,6 @@ class ChildHubScreen extends ConsumerWidget {
                   .map((p) => _PlanCard(item: p))
                   .toList(),
             ),
-          const SizedBox(height: 16),
-
-          // 功能入口（按类型分支）
-          AppSectionTitle('功能入口'),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            // 6 张卡片（3 行 × 2 列）时保持卡片方正；4 张时仍合适。
-            childAspectRatio: 1.25,
-            children: _entries(isAutism, archiveId)
-                .map((e) => _HubEntryCard(entry: e))
-                .toList(),
-          ),
           const SizedBox(height: 16),
 
           // 待办任务
@@ -205,6 +206,16 @@ class ChildHubScreen extends ConsumerWidget {
                   .toList(),
             ),
           const SizedBox(height: 16),
+
+          // 评估 / 计划 / 文档 时间线（按时间倒序）
+          AppSectionTitle('时间线'),
+          if (rehabState.detail != null)
+            ChildTimeline(
+              isAutism: isAutism,
+              rehab: rehabState.detail!,
+              autism: isAutism ? autismState?.detail : null,
+            ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -267,20 +278,20 @@ class ChildHubScreen extends ConsumerWidget {
   List<_HubEntry> _entries(bool isAutism, String id) {
     if (isAutism) {
       return <_HubEntry>[
-        // 档案总览（独立卡片）—— 点入总览页
-        const _HubEntry(
-          icon: Icons.dashboard_outlined,
-          title: '档案总览',
-          subtitle: '查看完整档案',
-          route: '/rehab-autism/{id}',
-          colorKey: 'teal',
-        ),
-        // 首次评测录入 —— 直接跳录入页，而非总览
+        // 孤独症 5+1 个独立入口（评估历史为独立卡片，点击进入独立页）。
         const _HubEntry(
           icon: Icons.assignment_outlined,
-          title: '首次评测录入',
-          subtitle: '文档一 493 题',
-          route: '/rehab-autism/{id}/items',
+          title: '评测录入',
+          subtitle: '选择量表逐题评分',
+          route: '/rehab-autism/{id}/scale-picker',
+          colorKey: 'rose',
+        ),
+        // 评估历史（孤独症专用卡片，点击进入独立页面展示 VB / OFFLINE 记录）
+        const _HubEntry(
+          icon: Icons.history_outlined,
+          title: '评估历史',
+          subtitle: 'VB 与线下模板记录',
+          route: '/rehab-autism/{id}/eval-history',
           colorKey: 'rose',
         ),
         // IEP 干预计划（独立卡片）
@@ -322,47 +333,40 @@ class ChildHubScreen extends ConsumerWidget {
           )).toList();
     }
     return <_HubEntry>[
-      // 听障 6 个入口：总览独立 + 首测/续评直达录入
-      const _HubEntry(
-        icon: Icons.dashboard_outlined,
-        title: '档案总览',
-        subtitle: '查看完整档案',
-        route: '/rehab/{id}',
-        colorKey: 'teal',
-      ),
+      // 听障 5 个独立入口（总览已去除，每项直达对应页）
       const _HubEntry(
         icon: Icons.assignment_outlined,
-        title: '首次评估录入',
-        subtitle: '听障评估表',
+        title: '首次评估',
+        subtitle: '录入/查看听障评估表',
         route: '/rehab/{id}/first-eval-edit',
-        colorKey: 'green',
+        colorKey: 'teal',
       ),
       const _HubEntry(
         icon: Icons.assessment_outlined,
         title: '持续评估',
-        subtitle: '待填写任务',
+        subtitle: '待填写 / 历次评估',
         route: '/rehab/{id}/cont-eval-edit',
         colorKey: 'amber',
       ),
       const _HubEntry(
         icon: Icons.hearing_outlined,
-        title: '听能管理记录',
-        subtitle: '听力图/诊断',
-        route: '/rehab/{id}',
+        title: '听能管理',
+        subtitle: '听力图 / 诊断记录',
+        route: '/rehab/{id}/hearing',
         colorKey: 'blue',
       ),
       const _HubEntry(
         icon: Icons.edit_calendar_outlined,
-        title: '每节课教学计划',
-        subtitle: 'AI 生成',
-        route: '/rehab/{id}',
+        title: '教学计划',
+        subtitle: '每节课计划 / AI 生成',
+        route: '/rehab/{id}/plan',
         colorKey: 'purple',
       ),
       const _HubEntry(
         icon: Icons.event_note_outlined,
         title: '评估待办',
         subtitle: '查看提醒',
-        route: '/rehab/{id}',
+        route: '/rehab/{id}/tasks',
         colorKey: 'rose',
       ),
     ].map((e) => _HubEntry(

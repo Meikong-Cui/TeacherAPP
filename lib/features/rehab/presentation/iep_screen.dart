@@ -458,7 +458,7 @@ class _EmptyState extends ConsumerWidget {
                   onChanged: (v) => setSt(() => ab = v ?? ab),
                 ),
                 const SizedBox(height: 12),
-                const Text('薄弱领域（可多选；留空则每领域默认推荐）',
+                const Text('薄弱领域（可多选；留空则按评估得分自动选取最薄弱领域）',
                     style: TextStyle(fontSize: 13)),
                 const SizedBox(height: 8),
                 Wrap(

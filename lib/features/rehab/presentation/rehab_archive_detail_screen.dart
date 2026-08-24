@@ -83,7 +83,7 @@ class _RehabArchiveDetailScreenState
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     Future.microtask(
         () => ref.read(rehabArchiveDetailProvider(widget.archiveId).notifier).load(widget.archiveId));
   }
@@ -118,6 +118,8 @@ class _RehabArchiveDetailScreenState
       });
     }
 
+    // 听障档案详情固定为 5 Tab（首次评估 / 持续评估 / 教学计划 / 听能管理 / 手写照片）。
+    // OFFLINE / VB 等孤独症模板已独立到 /rehab-autism/:id，不再在此路由展示。
     return Scaffold(
       appBar: AppBar(
         title: Text(state.detail?.archive.childName ?? '档案详情'),
@@ -125,7 +127,6 @@ class _RehabArchiveDetailScreenState
           controller: _tabController,
           isScrollable: true,
           tabs: const <Widget>[
-            Tab(text: '概览/任务'),
             Tab(text: '首次评估'),
             Tab(text: '持续评估'),
             Tab(text: '教学计划'),
@@ -141,7 +142,6 @@ class _RehabArchiveDetailScreenState
               : TabBarView(
                   controller: _tabController,
                   children: <Widget>[
-                    _OverviewTab(archiveId: widget.archiveId),
                     _FirstEvalTab(archiveId: widget.archiveId),
                     _ContEvalTab(archiveId: widget.archiveId),
                     _PlanTab(archiveId: widget.archiveId),

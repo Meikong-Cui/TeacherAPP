@@ -176,7 +176,7 @@ class NotificationService {
         _navigateTo('/reimbursement/list');
         break;
       case 'seal':
-        _navigateTo('/seal/list');
+        _navigateTo('/seal');
         break;
       case 'task':
       case 'notice':

@@ -61,8 +61,14 @@ class ApiClient {
     throw ApiException(msg, resp.statusCode);
   }
 
-  Future<dynamic> get(String path) async {
-    final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
+  Future<dynamic> get(String path, {Map<String, dynamic>? params}) async {
+    // 注意：Uri.replace(queryParameters: {}) 会**清空**原 path 里的 query（Dart Uri 行为）。
+    // 原来无脑调 .replace 会把 `get('/api/x?a=1&b=2')` 这种手动拼好的 query 全部干没。
+    // 修复：仅当显式传了 params 时才用 replace 覆盖；否则保留 path 自带 query。
+    Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
+    if (params != null) {
+      uri = uri.replace(queryParameters: _stringifyParams(params));
+    }
     final http.Response resp = await _client.get(uri, headers: _headers());
     return _unwrap(resp);
   }
@@ -113,6 +119,17 @@ class ApiClient {
     }
     throw ApiException(msg, resp.statusCode);
   }
+}
+
+/// 把 [Map] 过滤掉 null 后全部 toString，供 queryParameters 序列化使用。
+Map<String, String> _stringifyParams(Map<String, dynamic>? src) {
+  if (src == null || src.isEmpty) return const <String, String>{};
+  final Map<String, String> out = <String, String>{};
+  src.forEach((String k, dynamic v) {
+    if (v == null) return;
+    out[k] = v.toString();
+  });
+  return out;
 }
 
 /// 全局单例客户端。

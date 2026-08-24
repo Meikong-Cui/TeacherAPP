@@ -305,20 +305,65 @@ class RehabRepository {
   //  评估题目逐题录入（autism_eval_item）
   // ════════════════════════════════════════════════════════════════
 
-  /// 批量保存逐题评分（空值由后端按删除处理）。
-  Future<int> saveEvalItems(List<AutismEvalItem> items) async {
-    final dynamic data = await apiClient.post(
-      '$_autismPath/items/batch',
-      items.map((e) => e.toJson()).toList(),
-    );
-    if (data is int) return data;
-    return int.tryParse(data?.toString() ?? '0') ?? 0;
+  /// 获取全部可用评测量表（残联标准 / OFFLINE / VB …）。
+  Future<List<AutismEvalForm>> listEvalForms() async {
+    final dynamic data = await apiClient.get('$_autismPath/forms');
+    if (data is! List) return const <AutismEvalForm>[];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map((e) => AutismEvalForm.fromJson(e))
+        .toList();
   }
 
-  /// 拉取某档案下某 source 的全部逐题评分。
-  Future<List<AutismEvalItem>> listEvalItems(String archiveId, String source) async {
-    final dynamic data =
-        await apiClient.get('$_autismPath/items/list/$archiveId?source=$source');
+  /// 获取某量表的题项定义（树形：group 总项目 / item 作答项）。
+  Future<List<AutismEvalFormItem>> listEvalFormItems(String formCode) async {
+    final dynamic data = await apiClient.get('$_autismPath/forms/$formCode/items');
+    if (data is! List) return const <AutismEvalFormItem>[];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map((e) => AutismEvalFormItem.fromJson(e))
+        .toList();
+  }
+
+  /// 新建一次评估轮次，返回轮次 id（evalSeq 由后端自动递增）。
+  Future<String> createEvalRound(AutismEvalRound round) async {
+    final dynamic data = await apiClient.post('$_autismPath/rounds', round.toJson());
+    return data?.toString() ?? '';
+  }
+
+  /// 列出某档案在某量表下的所有评估轮次（按 evalSeq 倒序）。
+  Future<List<AutismEvalRound>> listEvalRounds(String archiveId,
+      [String? formCode]) async {
+    final StringBuffer sb = StringBuffer('$_autismPath/rounds?archiveId=$archiveId');
+    if (formCode != null && formCode.isNotEmpty) {
+      sb.write('&formCode=${Uri.encodeQueryComponent(formCode)}');
+    }
+    final dynamic data = await apiClient.get(sb.toString());
+    if (data is! List) return const <AutismEvalRound>[];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map((e) => AutismEvalRound.fromJson(e))
+        .toList();
+  }
+
+  /// 获取单个轮次详情。
+  Future<AutismEvalRound> getEvalRound(String roundId) async {
+    final dynamic data = await apiClient.get('$_autismPath/rounds/$roundId');
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('评估轮次响应异常');
+    }
+    return AutismEvalRound.fromJson(data);
+  }
+
+  /// 更新轮次元信息（评估日期 / 测评人 / 生心龄等）。
+  Future<void> updateEvalRound(AutismEvalRound round) async {
+    if (round.id == null) return;
+    await apiClient.put('$_autismPath/rounds/${round.id}', round.toJson());
+  }
+
+  /// 拉取某轮次的逐题作答。
+  Future<List<AutismEvalItem>> listRoundItems(String roundId) async {
+    final dynamic data = await apiClient.get('$_autismPath/rounds/$roundId/items');
     if (data is! List) return const <AutismEvalItem>[];
     return data
         .whereType<Map<String, dynamic>>()
@@ -326,14 +371,226 @@ class RehabRepository {
         .toList();
   }
 
-  /// 拉取评估统计（剖面图 + 折线序列）。
-  Future<AutismEvalStats> getEvalStats(String archiveId, String source) async {
-    final dynamic data =
-        await apiClient.get('$_autismPath/items/stats/$archiveId?source=$source');
+  /// 批量保存某轮次逐题作答（空值由后端按删除处理）。
+  Future<int> saveRoundItems(String roundId, List<AutismEvalItem> items) async {
+    final dynamic data = await apiClient.post(
+      '$_autismPath/rounds/$roundId/items/batch',
+      items.map((e) => e.toJson()).toList(),
+    );
+    if (data is int) return data;
+    return int.tryParse(data?.toString() ?? '0') ?? 0;
+  }
+
+  /// 拉取某轮次统计（按领域聚合）。
+  Future<EvalRoundStats> getRoundStats(String roundId) async {
+    final dynamic data = await apiClient.get('$_autismPath/rounds/$roundId/stats');
     if (data is! Map<String, dynamic>) {
       throw const ApiException('评估统计响应异常');
     }
-    return AutismEvalStats.fromJson(data);
+    return EvalRoundStats.fromJson(data);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  线下模板评估（OFFLINE）：A/B 卷答题 + 7 领域得分 + 3 报告
+  // ══════════════════════════════════════════════════════════════
+
+  /// A/B 卷题项模板（无题干，仅题号+选项+归属领域）。
+  Future<List<Map<String, dynamic>>> listOfflineItems(String paper) async {
+    final dynamic data =
+        await apiClient.get('$_autismPath/offline/items?paper=${Uri.encodeQueryComponent(paper)}');
+    if (data is! List) return const <Map<String, dynamic>>[];
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// 某档案某卷的已答记录。
+  /// `roundId` 非空时按 round 答案 JSON 取（评估历史中点 round 进答题时使用）。
+  Future<List<Map<String, dynamic>>> listOfflineAnswers(
+      String archiveId, String paper, {String? roundId}) async {
+    final String qs = roundId != null && roundId.isNotEmpty
+        ? '&roundId=${Uri.encodeQueryComponent(roundId)}'
+        : '';
+    final dynamic data = await apiClient.get(
+        '$_autismPath/offline/answers?archiveId=$archiveId&paper=${Uri.encodeQueryComponent(paper)}$qs');
+    if (data is! List) return const <Map<String, dynamic>>[];
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// 保存某卷答题（items: [{itemId, value}]）。返回保存条数。
+  /// `roundId` 非空时双写主表与 round 的答案 JSON（让主页「第三份报告」与该 round 的报告都即时刷新）。
+  Future<int> saveOfflineAnswers(String archiveId, String paper,
+      List<Map<String, dynamic>> items, {String? roundId}) async {
+    final Map<String, dynamic> body = <String, dynamic>{
+      'archiveId': archiveId,
+      'paper': paper,
+      'items': items,
+    };
+    if (roundId != null && roundId.isNotEmpty) body['roundId'] = roundId;
+    final dynamic data = await apiClient.post('$_autismPath/offline/answers', body);
+    if (data is int) return data;
+    return int.tryParse(data?.toString() ?? '0') ?? 0;
+  }
+
+  /// 7 领域得分 + 适应年龄当量（缺则补空行，score=null）。
+  Future<List<Map<String, dynamic>>> getOfflineResult(String archiveId) async {
+    final dynamic data =
+        await apiClient.get('$_autismPath/offline/result?archiveId=$archiveId');
+    if (data is! List) return const <Map<String, dynamic>>[];
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// 保存 7 领域得分（results: [{domainKey, score, ageEquivalent}]）。
+  /// A、B 两卷均完成时后端自动生成 3 份报告。
+  Future<List<Map<String, dynamic>>> saveOfflineResult(
+      String archiveId, List<Map<String, dynamic>> results) async {
+    final dynamic data = await apiClient.post('$_autismPath/offline/result', <String, dynamic>{
+      'archiveId': archiveId,
+      'results': results,
+    });
+    if (data is! List) return const <Map<String, dynamic>>[];
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// 单份报告（type: EVAL / TEACHER / PARENT），返回 content_json 原始 Map。
+  Future<Map<String, dynamic>?> getOfflineReport(String archiveId, String type) async {
+    final dynamic data = await apiClient
+        .get('$_autismPath/offline/report?archiveId=$archiveId&type=${Uri.encodeQueryComponent(type)}');
+    if (data is! Map<String, dynamic>) return null;
+    return data;
+  }
+
+  /// 报告列表（用于详情页显示生成状态）。
+  Future<List<Map<String, dynamic>>> listOfflineReports(String archiveId) async {
+    final dynamic data =
+        await apiClient.get('$_autismPath/offline/report/list?archiveId=$archiveId');
+    if (data is! List) return const <Map<String, dynamic>>[];
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// B卷评分结果：按年龄段统计通过情况，返回最大通过段与对应评语（教师/家长）。
+  /// 后端 GET /autism/offline/b-result?archiveId=
+  Future<Map<String, dynamic>> getOfflineBResult(String archiveId) async {
+    final dynamic data = await apiClient
+        .get('$_autismPath/offline/b-result?archiveId=$archiveId');
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('B卷评分响应异常');
+    }
+    return data;
+  }
+
+  /// A卷得分总览：7 领域类型得分/满分 + 总分，用于发展功能剖面图。
+  /// 后端 GET /autism/offline/a-overview?archiveId= (&roundId= 可选)
+  Future<Map<String, dynamic>> getOfflineAOverview(String archiveId,
+      {String? roundId}) async {
+    final String qs = roundId != null && roundId.isNotEmpty
+        ? '&roundId=${Uri.encodeQueryComponent(roundId)}'
+        : '';
+    final dynamic data = await apiClient
+        .get('$_autismPath/offline/a-overview?archiveId=$archiveId$qs');
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('A卷得分总览响应异常');
+    }
+    return data;
+  }
+
+  /// 9 行评估报告（教师版 TEACHER / 家长版 PARENT）：个人自理来自 B卷，其余 8 行占位待 A卷评语。
+  /// 后端 GET /autism/offline/eval-report?archiveId=&type=
+  Future<Map<String, dynamic>> getOfflineEvalReport(
+      String archiveId, String type) async {
+    final dynamic data = await apiClient.get(
+      '$_autismPath/offline/eval-report'
+      '?archiveId=${Uri.encodeQueryComponent(archiveId)}'
+      '&type=${Uri.encodeQueryComponent(type)}',
+    );
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('9 行评估报告响应异常');
+    }
+    return data;
+  }
+
+  /// 9 行评估报告 PDF（返回字节流，教师版/家长版）。
+  /// 后端 GET /autism/offline/eval-report/pdf?archiveId=&type=
+  Future<Uint8List> getOfflineEvalReportPdf(
+      String archiveId, String type) async {
+    return apiClient.getBytes(
+      '$_autismPath/offline/eval-report/pdf'
+      '?archiveId=${Uri.encodeQueryComponent(archiveId)}'
+      '&type=${Uri.encodeQueryComponent(type)}',
+    );
+  }
+
+  /// 归档当前线下模板草稿为新一轮评估，返回轮次 id（int）。
+  /// 后端 POST /autism/offline/rounds
+  Future<int> createOfflineRound(String archiveId, {String? evaluatorName}) async {
+    final Map<String, dynamic> body = <String, dynamic>{'archiveId': archiveId};
+    if (evaluatorName != null) body['evaluatorName'] = evaluatorName;
+    final dynamic data = await apiClient.post('$_autismPath/offline/rounds', body);
+    if (data is int) return data;
+    return int.tryParse(data?.toString() ?? '0') ?? 0;
+  }
+
+  /// 列出某档案的全部线下模板评估轮次（倒序）。
+  /// 后端 GET /autism/offline/rounds?archiveId=
+  Future<List<Map<String, dynamic>>> listOfflineRounds(String archiveId) async {
+    final dynamic data = await apiClient
+        .get('$_autismPath/offline/rounds?archiveId=${Uri.encodeQueryComponent(archiveId)}');
+    if (data is! List) return const <Map<String, dynamic>>[];
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// 单个轮次详情（含 A/B 答题、7 领域结果、教师/家长版报告快照）。
+  /// 后端 GET /autism/offline/rounds/{id}
+  Future<Map<String, dynamic>?> getOfflineRound(String roundId) async {
+    final dynamic data = await apiClient
+        .get('$_autismPath/offline/rounds/${Uri.encodeQueryComponent(roundId)}');
+    if (data is! Map<String, dynamic>) return null;
+    return data;
+  }
+
+  /// 单个轮次报告 PDF（教师版/家长版），返回字节流。
+  /// 后端 GET /autism/offline/rounds/{id}/report/pdf?role=
+  Future<Uint8List> getOfflineRoundReportPdf(String roundId, String role) async {
+    return apiClient.getBytes(
+      '$_autismPath/offline/rounds/${Uri.encodeQueryComponent(roundId)}/report/pdf'
+      '?role=${Uri.encodeQueryComponent(role)}',
+    );
+  }
+
+  /// 第三份报告（发展总览）PDF：A 卷得分总览计数 + 发展功能剖面图，返回字节流。
+  /// `roundId` 非空时按 round 答案 JSON 出 PDF。
+  /// 后端 GET /autism/offline/overview/report/pdf?archiveId= (&roundId= 可选)
+  Future<Uint8List> getOfflineOverviewReportPdf(String archiveId, {String? roundId}) async {
+    final String qs = roundId != null && roundId.isNotEmpty
+        ? '&roundId=${Uri.encodeQueryComponent(roundId)}'
+        : '';
+    return apiClient.getBytes(
+      '$_autismPath/offline/overview/report/pdf'
+      '?archiveId=${Uri.encodeQueryComponent(archiveId)}$qs',
+    );
+  }
+
+  /// VB 计分：对某评估轮次计分并保存各维度得分，返回维度得分与儿童情况说明。
+  /// 后端 POST /autism/vb/score?roundId=
+  Future<Map<String, dynamic>> vbScore(String roundId) async {
+    final dynamic data = await apiClient
+        .post('$_autismPath/vb/score?roundId=${Uri.encodeQueryComponent(roundId)}');
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('VB 计分响应异常');
+    }
+    return data;
+  }
+
+  /// VB 多次评估趋势：同一儿童同一表单每次评估的维度得分折线序列。
+  /// 后端 GET /autism/vb/trend?archiveId=&formCode=
+  Future<Map<String, dynamic>> vbTrend(String archiveId, String formCode) async {
+    final dynamic data = await apiClient.get(
+      '$_autismPath/vb/trend'
+      '?archiveId=${Uri.encodeQueryComponent(archiveId)}'
+      '&formCode=${Uri.encodeQueryComponent(formCode)}',
+    );
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('VB 趋势响应异常');
+    }
+    return data;
   }
 
   // ════════════════════════════════════════════════════════════════

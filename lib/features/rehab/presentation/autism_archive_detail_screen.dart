@@ -100,10 +100,8 @@ class _AutismArchiveDetailScreenState
                       ),
                       const SizedBox(height: 16),
                       _EvalEntrySection(
-                        firstEvalId: st.detail!.firstEval?.id,
                         onItems: () => context.push(
-                          '/rehab-autism/${widget.archiveId}/items'
-                          '?sourceId=${st.detail!.firstEval?.id ?? 0}',
+                          '/rehab-autism/${widget.archiveId}/scale-picker',
                         ),
                         onCharts: () => context.push(
                           '/rehab-autism/${widget.archiveId}/charts',
@@ -337,12 +335,10 @@ class _FirstEvalSection extends StatelessWidget {
 /// 评估题目录入入口（逐题评分 + 图表 + 效果评估表）。
 class _EvalEntrySection extends StatelessWidget {
   const _EvalEntrySection({
-    required this.firstEvalId,
     required this.onItems,
     required this.onCharts,
     required this.onEffect,
   });
-  final String? firstEvalId;
   final VoidCallback onItems;
   final VoidCallback onCharts;
   final VoidCallback onEffect;

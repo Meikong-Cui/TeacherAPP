@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <!-- 康复档案系统通知（决策 #3） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 音量跳一跳：麦克风拾音，按音量决定跳跃距离 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="teacher_app"
         android:name="${applicationName}"

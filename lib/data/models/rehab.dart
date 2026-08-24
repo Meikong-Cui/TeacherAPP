@@ -93,6 +93,7 @@ class RehabArchive {
     this.remark,
     this.createTime,
     this.templateType = '',
+    this.evalFormCode = 'STANDARD',
   });
 
   final String id;
@@ -104,6 +105,8 @@ class RehabArchive {
   final String? remark;
   final DateTime? createTime;
   final String templateType;
+  /// 孤独症档案默认评测量表代码：STANDARD（残联标准）/ OFFLINE / VB。
+  final String evalFormCode;
 
   /// 是否为孤独症档案（决定详情页走孤独症模板）。
   bool get isAutism => templateType.toUpperCase() == 'AUTISM';
@@ -121,6 +124,7 @@ class RehabArchive {
         remark: j['remark'] as String?,
         createTime: _dt(j['createTime']),
         templateType: (j['templateType'] as String?) ?? '',
+        evalFormCode: (j['evalFormCode'] as String?) ?? 'STANDARD',
       );
 
   /// 序列化（创建/更新档案用）。id 为空时不带上，由后端生成。
@@ -131,6 +135,7 @@ class RehabArchive {
         'campusName': campusName,
         'status': status.code,
         'templateType': templateType,
+        if (evalFormCode.isNotEmpty) 'evalFormCode': evalFormCode,
         if (remark != null) 'remark': remark,
       };
 }

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:teacher_app/app/design_tokens.dart';
 import 'package:teacher_app/core/theme_mode_notifier.dart';
 import 'package:teacher_app/features/auth/data/auth_repository.dart';
 import 'package:teacher_app/data/providers.dart';
 import 'package:teacher_app/shared/ui.dart';
 
-/// 我的。
+/// 我的（仅保留个人信息 / 主题 / 关于，办公功能已迁出到「办公」页）。
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -14,52 +15,70 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final TeacherUser user = ref.watch(currentUserProvider);
     final ThemeMode mode = ref.watch(themeModeProvider);
-    final ColorScheme colors = Theme.of(context).colorScheme;
-    final TextTheme textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('我的'),
-        actions: const <Widget>[ThemeToggleButton()],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: <Widget>[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
+      body: SafeArea(
+        bottom: false,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          children: <Widget>[
+            // 个人信息卡（渐变）
+            GradientCard(
+              gradient: AppGradients.greeting,
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+              radius: AppRadius.lg,
               child: Row(
                 children: <Widget>[
-                  CircleAvatar(
-                    radius: 28,
-                    backgroundColor: colors.primaryContainer,
-                    foregroundColor: colors.onPrimaryContainer,
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: AppGradients.teal,
+                    ),
+                    alignment: Alignment.center,
                     child: Text(user.avatar,
-                        style: textTheme.titleLarge),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: AppFontSize.headline,
+                          fontWeight: FontWeight.bold,
+                        )),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(user.name,
-                            style: textTheme.titleLarge
-                                ?.copyWith(fontWeight: FontWeight.w800)),
-                        const SizedBox(height: 2),
-                        Text('${user.role} · ${user.dept}'),
+                            style: const TextStyle(
+                              fontSize: AppFontSize.headline,
+                              fontWeight: FontWeight.w800,
+                              color: AppPalette.ink,
+                            )),
+                        const SizedBox(height: 4),
+                        Text('${user.role} · ${user.dept}',
+                            style: const TextStyle(
+                              fontSize: AppFontSize.small,
+                              color: AppPalette.inkMute,
+                            )),
                         Text(user.center,
-                            style: textTheme.bodySmall),
+                            style: const TextStyle(
+                              fontSize: AppFontSize.small,
+                              color: AppPalette.inkMute,
+                            )),
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          const AppSectionTitle('主题'),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+            const SizedBox(height: 20),
+
+            // 主题
+            const AppSectionTitle('主题'),
+            SoftCard(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 4),
               child: SegmentedButton<ThemeMode>(
                 segments: const <ButtonSegment<ThemeMode>>[
                   ButtonSegment<ThemeMode>(
@@ -80,86 +99,61 @@ class ProfileScreen extends ConsumerWidget {
                     ref.read(themeModeProvider.notifier).set(v.first),
               ),
             ),
-          ),
-          const AppSectionTitle('功能'),
-          _EntryTile(
-            icon: Icons.location_on_outlined,
-            title: '上下班签到',
-            subtitle: '指定地点 1000 米内可打卡',
-            onTap: () => context.push('/clock-in'),
-          ),
-          _EntryTile(
-            icon: Icons.receipt_long_outlined,
-            title: '财务报销',
-            subtitle: '申请并提交至 OA 后台等待审批',
-            onTap: () => context.push('/reimbursement/list'),
-          ),
-          _EntryTile(
-            icon: Icons.folder_open_outlined,
-            title: '康复档案',
-            subtitle: '填写评估与教学计划、上传手写照片',
-            onTap: () => context.push('/rehab'),
-          ),
-          _EntryTile(
-            icon: Icons.gpp_good_outlined,
-            title: '用章申请',
-            subtitle: '提交用章申请并查看审批进度',
-            onTap: () => context.push('/seal/apply'),
-          ),
-          const SizedBox(height: 8),
-          _EntryTile(
-            icon: Icons.info_outline,
-            title: '关于',
-            onTap: () => showAboutDialog(
-              context: context,
-              applicationName: '语亦丰康复教师端',
-              applicationVersion: '1.0.0',
-              children: const <Widget>[
-                Text('儿童康复教育系统 · 教师端 App（Flutter）'),
-              ],
+
+            const SizedBox(height: 8),
+
+            // 关于
+            const AppSectionTitle('关于'),
+            SoftCard(
+              onTap: () => showAboutDialog(
+                context: context,
+                applicationName: '语亦丰康复教师端',
+                applicationVersion: '1.0.0',
+                children: const <Widget>[
+                  Text('儿童康复教育系统 · 教师端 App（Flutter）'),
+                ],
+              ),
+              child: Row(children: const <Widget>[
+                AccentSquare(
+                  icon: Icons.info_outline,
+                  gradient: AppGradients.teal,
+                  size: 36,
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('关于',
+                      style: TextStyle(
+                          fontSize: AppFontSize.body,
+                          fontWeight: FontWeight.w600)),
+                ),
+                Icon(Icons.chevron_right, color: AppPalette.inkMute),
+              ]),
             ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: () async {
-                await const AuthRepository().logout();
-                ref.read(authChangedProvider.notifier).state++;
-                if (context.mounted) context.go('/login');
-              },
-              child: const Text('退出登录'),
+
+            const SizedBox(height: 24),
+
+            // 退出登录
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  await const AuthRepository().logout();
+                  ref.read(authChangedProvider.notifier).state++;
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((_) => false);
+                    context.go('/login');
+                  }
+                },
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('退出登录'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppPalette.danger,
+                  side: const BorderSide(color: AppPalette.danger),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-        ],
-      ),
-    );
-  }
-}
-
-class _EntryTile extends StatelessWidget {
-  const _EntryTile({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-        title: Text(title),
-        subtitle: subtitle != null ? Text(subtitle!) : null,
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
+          ],
+        ),
       ),
     );
   }

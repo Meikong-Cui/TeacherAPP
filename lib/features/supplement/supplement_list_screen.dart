@@ -2,21 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_app/app/design_tokens.dart';
-import 'package:teacher_app/features/seal/data/seal_repository.dart';
+import 'package:teacher_app/features/supplement/supplement_repository.dart';
 import 'package:teacher_app/features/workflow/workflow_repository.dart';
 
-/// 「办公」→「用章」列表页（教师端）。数据与 OA 网页共用 /api/oa/record
-/// category='seal-apply'；审批进度由通用流程引擎的「用章申请」实例驱动。
-class SealListScreen extends ConsumerStatefulWidget {
-  const SealListScreen({super.key});
+/// 「办公」→「补卡」列表页（教师端）。数据与 OA 网页共用 /api/oa/record
+/// category='supplement-card'；审批进度由通用流程引擎「补卡申请」实例驱动。
+/// 审批通过后，后端会自动写入一条「员工打卡」记录。
+class SupplementListScreen extends ConsumerStatefulWidget {
+  const SupplementListScreen({super.key});
 
   @override
-  ConsumerState<SealListScreen> createState() => _SealListScreenState();
+  ConsumerState<SupplementListScreen> createState() =>
+      _SupplementListScreenState();
 }
 
-class _SealListScreenState extends ConsumerState<SealListScreen> {
-  final SealRepository _repo = SealRepository();
-  List<SealRecord> _list = const <SealRecord>[];
+class _SupplementListScreenState extends ConsumerState<SupplementListScreen> {
+  final SupplementRepository _repo = SupplementRepository();
+  List<SupplementRecord> _list = const <SupplementRecord>[];
   Map<int, WorkflowInstance> _wfMap = const <int, WorkflowInstance>{};
   bool _loading = true;
   String? _error;
@@ -33,11 +35,12 @@ class _SealListScreenState extends ConsumerState<SealListScreen> {
       _error = null;
     });
     try {
-      final List<SealRecord> rows = await _repo.listSeals(keyword: keyword);
+      final List<SupplementRecord> rows =
+          await _repo.listSupplements(keyword: keyword);
       final Map<int, WorkflowInstance> wfMap = <int, WorkflowInstance>{};
       await Future.wait(rows
-          .where((SealRecord r) => r.id != null && r.id! > 0)
-          .map((SealRecord r) async {
+          .where((SupplementRecord r) => r.id != null && r.id! > 0)
+          .map((SupplementRecord r) async {
         final WorkflowInstance? wf =
             await WorkflowRepository().findByBusiness('oa_record', r.id!);
         if (wf != null) wfMap[r.id!] = wf;
@@ -58,7 +61,7 @@ class _SealListScreenState extends ConsumerState<SealListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('用章',
+        title: const Text('补卡',
             style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -94,8 +97,8 @@ class _SealListScreenState extends ConsumerState<SealListScreen> {
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
                         itemCount: _list.length,
                         itemBuilder: (BuildContext ctx, int i) {
-                          final SealRecord r = _list[i];
-                          return _SealCard(
+                          final SupplementRecord r = _list[i];
+                          return _SupplementCard(
                             record: r,
                             wf: r.id == null ? null : _wfMap[r.id!],
                           );
@@ -105,25 +108,24 @@ class _SealListScreenState extends ConsumerState<SealListScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _goApply(context),
         icon: const Icon(Icons.add),
-        label: const Text('新建申请'),
+        label: const Text('新增补卡'),
       ),
     );
   }
 
   Future<void> _goApply(BuildContext context) async {
-    final bool? ok = await context.push<bool>('/seal/apply');
+    final bool? ok = await context.push<bool>('/supplement/new');
     if (ok == true) _load();
   }
 }
 
-class _SealCard extends StatelessWidget {
-  const _SealCard({required this.record, this.wf});
-  final SealRecord record;
+class _SupplementCard extends StatelessWidget {
+  const _SupplementCard({required this.record, this.wf});
+  final SupplementRecord record;
   final WorkflowInstance? wf;
 
   @override
   Widget build(BuildContext context) {
-    // 审批流状态优先于记录自身状态展示进度
     final String statusLabel = wf != null ? wf!.statusLabel : record.statusLabel;
     final Color statusTone = wf != null
         ? (wf!.status == 2
@@ -159,7 +161,7 @@ class _SealCard extends StatelessWidget {
                           fontSize: AppFontSize.body,
                           fontWeight: FontWeight.bold,
                         )),
-                    Text(record.sealType,
+                    Text(record.supplementDate,
                         style: const TextStyle(
                           fontSize: AppFontSize.small,
                           color: AppPalette.inkMute,
@@ -174,15 +176,17 @@ class _SealCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 6,
               children: <Widget>[
-                AppChip(record.sealType, tone: AppPalette.warning),
+                AppChip(record.supplementType, tone: AppPalette.warning),
                 if (wf != null && wf!.pending && wf!.currentNodeName != null)
                   AppChip('当前：${wf!.currentNodeName}',
                       tone: AppPalette.brandDark),
+                if (wf != null && wf!.status == 2)
+                  AppChip('已补记打卡', tone: AppPalette.success),
               ],
             ),
-            if (record.purpose.trim().isNotEmpty) ...<Widget>[
+            if (record.reason.trim().isNotEmpty) ...<Widget>[
               const SizedBox(height: 8),
-              Text('事由：${record.purpose}',
+              Text('原因：${record.reason}',
                   style: const TextStyle(
                     fontSize: AppFontSize.small,
                     color: AppPalette.ink,
@@ -207,16 +211,16 @@ class _EmptyState extends StatelessWidget {
         child: SoftCard(
           child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
             const AccentSquare(
-                icon: Icons.gpp_good_outlined,
-                gradient: AppGradients.sky,
+                icon: Icons.fact_check_outlined,
+                gradient: AppGradients.amber,
                 size: 56),
             const SizedBox(height: 12),
-            const Text('还没有用章记录',
+            const Text('还没有补卡记录',
                 style: TextStyle(
                     fontSize: AppFontSize.title, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             const Text(
-              '提交后由你选择的审批人处理，\n可在 OA 网页「待办中心」审批。',
+              '漏打卡时提交补卡，直属上级审批通过后\n系统自动补记考勤。',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: AppFontSize.small,
@@ -227,7 +231,7 @@ class _EmptyState extends StatelessWidget {
             FilledButton.icon(
               onPressed: onApply,
               icon: const Icon(Icons.add),
-              label: const Text('提交用章'),
+              label: const Text('提交补卡'),
             ),
           ]),
         ),

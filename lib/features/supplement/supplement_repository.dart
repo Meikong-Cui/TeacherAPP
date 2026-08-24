@@ -1,27 +1,25 @@
 import 'package:teacher_app/core/api_client.dart';
 import 'package:teacher_app/features/workflow/workflow_repository.dart';
 
-/// OA 用章申请 (seal-apply) 数据通道（走通用流程引擎：用章申请模板 + 发起人自选审批人）。
+/// 补卡申请 (supplement-card) 数据通道（走通用流程引擎：补卡申请模板 + 直属上级审批）。
 /// 与 oa-admin-web 共用同一份数据：调用 /api/oa/record
-///   POST category='seal-apply' 创建 / GET 列表。
-/// OA 网页在 src/config/oaRecordConfig.ts 已定义 seal-apply 的字段：
-///   employee / sealType(公章/财务章/合同章) / purpose / remark / status
-class SealRecord {
-  const SealRecord({
+///   POST category='supplement-card' 创建 / GET 列表。
+class SupplementRecord {
+  const SupplementRecord({
     this.id,
     required this.employee,
-    required this.sealType,
-    required this.purpose,
-    this.remark,
+    required this.supplementType,
+    required this.supplementDate,
+    required this.reason,
     this.status = 1,
     this.createTime,
   });
 
   final int? id;
-  final String employee; // 员工姓名（OA 后端 `usr()` 选择器写的是 name）
-  final String sealType; // '公章' | '财务章' | '合同章'
-  final String purpose;
-  final String? remark;
+  final String employee; // 员工姓名
+  final String supplementType; // '上班漏卡' | '下班漏卡'
+  final String supplementDate; // yyyy-MM-dd
+  final String reason;
   final int status; // 0草稿/1待审批/2已完成/3已驳回
   final String? createTime;
 
@@ -40,14 +38,16 @@ class SealRecord {
     }
   }
 
-  factory SealRecord.fromJson(Map<String, dynamic> j) {
-    return SealRecord(
+  factory SupplementRecord.fromJson(Map<String, dynamic> j) {
+    return SupplementRecord(
       id: (j['id'] as num?)?.toInt(),
       employee: (j['employee'] as String?) ??
           (j['content'] is Map ? ((j['content']['employee'] ?? '') as String) : ''),
-      sealType: (j['sealType'] as String?) ?? _fromContent(j, 'sealType') ?? '',
-      purpose: (j['purpose'] as String?) ?? _fromContent(j, 'purpose') ?? '',
-      remark: (j['remark'] as String?) ?? _fromContent(j, 'remark'),
+      supplementType:
+          (j['supplementType'] as String?) ?? _fromContent(j, 'supplementType') ?? '',
+      supplementDate:
+          (j['supplementDate'] as String?) ?? _fromContent(j, 'supplementDate') ?? '',
+      reason: (j['reason'] as String?) ?? _fromContent(j, 'reason') ?? '',
       status: (j['status'] as num?)?.toInt() ?? 1,
       createTime: j['createTime'] as String?,
     );
@@ -60,14 +60,13 @@ class SealRecord {
   }
 }
 
-class SealRepository {
-  SealRepository({ApiClient? client}) : _client = client ?? apiClient;
+class SupplementRepository {
+  SupplementRepository({ApiClient? client}) : _client = client ?? apiClient;
   final ApiClient _client;
 
-  /// 列出当前用户提交的用章申请（category=seal-apply）。
-  Future<List<SealRecord>> listSeals({String? keyword}) async {
+  Future<List<SupplementRecord>> listSupplements({String? keyword}) async {
     final Map<String, dynamic> params = <String, dynamic>{
-      'category': 'seal-apply',
+      'category': 'supplement-card',
       'size': 50,
     };
     if (keyword != null && keyword.isNotEmpty) params['keyword'] = keyword;
@@ -77,20 +76,19 @@ class SealRepository {
         : <dynamic>[];
     return records
         .whereType<Map<String, dynamic>>()
-        .map((Map<String, dynamic> e) => SealRecord.fromJson(e))
+        .map((Map<String, dynamic> e) => SupplementRecord.fromJson(e))
         .toList();
   }
 
-  /// 创建用章业务记录（oa_record, category=seal-apply），返回主键。
-  Future<int> createSeal(SealRecord r) async {
+  Future<int> createSupplement(SupplementRecord r) async {
     final Map<String, dynamic> payload = <String, dynamic>{
-      'category': 'seal-apply',
-      'recordTitle': '${r.employee} · ${r.sealType}',
+      'category': 'supplement-card',
+      'recordTitle': '${r.employee} · ${r.supplementType}',
       'content': <String, dynamic>{
         'employee': r.employee,
-        'sealType': r.sealType,
-        'purpose': r.purpose,
-        'remark': r.remark ?? '',
+        'supplementType': r.supplementType,
+        'supplementDate': r.supplementDate,
+        'reason': r.reason,
       },
       'status': 1,
     };
@@ -102,24 +100,23 @@ class SealRepository {
     return 0;
   }
 
-  /// 两步走提交用章申请：
-  /// 1) 写入 oa_record（category=seal-apply）；
-  /// 2) 发起「用章申请」流程实例，审批人由发起人自选（approverUserId 写入表单）。
+  /// 两步走提交补卡申请：
+  /// 1) 写入 oa_record（category=supplement-card）；
+  /// 2) 发起「补卡申请」流程实例（直属上级审批），审批通过后后端自动写入打卡记录。
   /// 返回记录主键；hasWorkflow 标识是否成功挂上了审批流。
-  Future<SealSubmitResult> submitSeal(SealRecord r, int approverUserId) async {
-    final int recordId = await createSeal(r);
+  Future<SupplementSubmitResult> submitSupplement(SupplementRecord r) async {
+    final int recordId = await createSupplement(r);
     bool hasWorkflow = false;
     if (recordId > 0) {
       final WorkflowRepository wf = WorkflowRepository();
-      final WorkflowTemplate? tpl = await wf.findTemplateByName('用章申请');
+      final WorkflowTemplate? tpl = await wf.findTemplateByName('补卡申请');
       if (tpl != null) {
         await wf.startInstance(
           templateId: tpl.id,
           formValues: <String, dynamic>{
-            '印章类型': r.sealType,
-            '用章事由': r.purpose,
-            '备注': r.remark ?? '',
-            'approverUserId': approverUserId,
+            '补卡类型': r.supplementType,
+            '补卡日期': r.supplementDate,
+            '原因说明': r.reason,
           },
           businessType: 'oa_record',
           businessId: recordId,
@@ -127,12 +124,13 @@ class SealRepository {
         hasWorkflow = true;
       }
     }
-    return SealSubmitResult(recordId: recordId, hasWorkflow: hasWorkflow);
+    return SupplementSubmitResult(recordId: recordId, hasWorkflow: hasWorkflow);
   }
 }
 
-class SealSubmitResult {
-  const SealSubmitResult({required this.recordId, required this.hasWorkflow});
+class SupplementSubmitResult {
+  const SupplementSubmitResult(
+      {required this.recordId, required this.hasWorkflow});
   final int recordId;
   final bool hasWorkflow;
 }

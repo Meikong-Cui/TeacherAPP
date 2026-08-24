@@ -47,3 +47,12 @@ app.*.map.json
 
 # 本地构建同步脚本（仅本机用，不提交）
 tools/sync_to_tapp.sh
+
+# ===== 本地临时/生成文件（勿提交）=====
+.analyze_tmp.txt
+pubget_out.txt
+pubspec.lock.bak
+ios/Flutter/
+ios/Runner/GeneratedPluginRegistrant.h
+ios/Runner/GeneratedPluginRegistrant.m
+tools/sync_to_tapp.sh
