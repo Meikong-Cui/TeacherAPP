@@ -546,6 +546,15 @@ class RehabRepository {
     return data;
   }
 
+  /// 保存某轮评估报告「康复目标 / 指导说明」的勾选结果（project 名称列表）。
+  /// 后端 POST /autism/offline/rounds/{id}/guidance
+  Future<void> saveOfflineRoundGuidance(String roundId, List<String> rows) async {
+    await apiClient.post(
+      '$_autismPath/offline/rounds/${Uri.encodeQueryComponent(roundId)}/guidance',
+      <String, dynamic>{'rows': rows},
+    );
+  }
+
   /// 单个轮次报告 PDF（教师版/家长版），返回字节流。
   /// 后端 GET /autism/offline/rounds/{id}/report/pdf?role=
   Future<Uint8List> getOfflineRoundReportPdf(String roundId, String role) async {

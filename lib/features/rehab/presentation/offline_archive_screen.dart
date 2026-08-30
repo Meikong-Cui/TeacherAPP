@@ -52,8 +52,9 @@ class _OfflineArchiveHomeState extends ConsumerState<OfflineArchiveHome> {
           .read(rehabRepositoryProvider)
           .createOfflineRound(widget.archiveId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已保存为第 $roundId 次评估记录')));
+      // 归档后进入「康复目标 / 指导说明」挑选页，老师勾选需纳入报告的项。
+      context.push(
+          '/rehab/${widget.archiveId}/offline-guidance/$roundId');
       _load();
     } catch (e) {
       if (!mounted) return;
@@ -414,8 +415,8 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
           .read(rehabRepositoryProvider)
           .saveOfflineAnswers(widget.archiveId, widget.paper, items, roundId: widget.roundId);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存')));
-        context.pop();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存，正在出分…')));
+        await _autoScore();
       }
     } catch (e) {
       if (mounted) {
@@ -425,6 +426,97 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  /// 保存成功后自动拉取出分并弹窗展示（A 卷总分/7领域，B 卷最大通过段）。
+  Future<void> _autoScore() async {
+    final RehabRepository repo = ref.read(rehabRepositoryProvider);
+    try {
+      final Map<String, dynamic> data = widget.paper == 'A'
+          ? await repo.getOfflineAOverview(widget.archiveId)
+          : await repo.getOfflineBResult(widget.archiveId);
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('${widget.paper} 卷已自动出分'),
+          content: SingleChildScrollView(child: Text(_formatScore(data))),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('完成'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存成功，但出分失败：$e')),
+        );
+      }
+    } finally {
+      if (mounted) context.pop();
+    }
+  }
+
+  /// 一键填充全部题项并保存出分。
+  Future<void> _fillAndSave(String code) async {
+    setState(() {
+      for (final Map<String, dynamic> it in _items) {
+        final int id = _toInt(it['id']) ?? 0;
+        if (id != 0) _draft[id] = code;
+      }
+    });
+    await _save();
+  }
+
+  String _formatScore(Map<String, dynamic> data) {
+    final StringBuffer sb = StringBuffer();
+    data.forEach((k, v) {
+      if (v is Map) {
+        sb.writeln('$k:');
+        v.forEach((k2, v2) => sb.writeln('  $k2 = $v2'));
+      } else if (v is List) {
+        sb.writeln('$k: (${v.length} 项)');
+      } else {
+        sb.writeln('$k = $v');
+      }
+    });
+    return sb.toString().trim();
+  }
+
+  /// 一键答题快捷按钮区（A 卷全选 P/F；B 卷全选 独立完成）。
+  Widget _buildQuickFill() {
+    if (widget.paper == 'A') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            FilledButton.icon(
+              icon: const Icon(Icons.flash_on),
+              label: const Text('一键全选 P（通过）'),
+              onPressed: _saving ? null : () => _fillAndSave('P'),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.flash_on),
+              label: const Text('一键全选 F（0分）'),
+              onPressed: _saving ? null : () => _fillAndSave('F'),
+            ),
+          ],
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: FilledButton.icon(
+        icon: const Icon(Icons.flash_on),
+        label: const Text('一键全选 独立完成'),
+        onPressed: _saving ? null : () => _fillAndSave('INDEP'),
+      ),
+    );
   }
 
   @override
@@ -453,6 +545,7 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: <Widget>[
+          _buildQuickFill(),
           if (_filteredByAge)
             Container(
               margin: const EdgeInsets.only(bottom: 12),

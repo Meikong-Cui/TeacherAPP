@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
@@ -11,6 +12,20 @@ class ApiException implements Exception {
   final int? statusCode;
   @override
   String toString() => message;
+}
+
+/// HTTP 超时配置。生产环境 LAN/校园网常因网关把 8080 出站拦截、DNS 解析慢、
+/// 或对端挂起导致请求无响应——只要等不到 TCP 完成或服务器字节，UI 就会无限转圈。
+/// 给所有方法套一层 `.timeout()`，并在超时时统一抛出 [ApiException]，
+/// 让登录/列表/导出页真正显示"网络异常，请重试"，而不是死锁按钮。
+class ApiTimeouts {
+  const ApiTimeouts._();
+  /// 建立 TCP 连接的最长允许时间。
+  static const Duration connect = Duration(seconds: 6);
+  /// 从连接成功开始等服务器回包的最长允许时间（含响应头与响应体）。
+  static const Duration read = Duration(seconds: 10);
+  /// 整个请求的最长允许时间（兜底，避免极端情况两项叠加超出预期）。
+  static const Duration overall = Duration(seconds: 20);
 }
 
 /// 统一 HTTP 客户端：自动附带 JWT、统一解包后端 `{code,data,msg}` 结构。
@@ -69,33 +84,33 @@ class ApiClient {
     if (params != null) {
       uri = uri.replace(queryParameters: _stringifyParams(params));
     }
-    final http.Response resp = await _client.get(uri, headers: _headers());
+    final http.Response resp = await _run(() => _client.get(uri, headers: _headers()));
     return _unwrap(resp);
   }
 
   Future<dynamic> post(String path, [Object? body]) async {
     final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
-    final http.Response resp = await _client.post(
-      uri,
-      headers: _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    final http.Response resp = await _run(() => _client.post(
+          uri,
+          headers: _headers(),
+          body: body == null ? null : jsonEncode(body),
+        ));
     return _unwrap(resp);
   }
 
   Future<dynamic> put(String path, [Object? body]) async {
     final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
-    final http.Response resp = await _client.put(
-      uri,
-      headers: _headers(),
-      body: body == null ? null : jsonEncode(body),
-    );
+    final http.Response resp = await _run(() => _client.put(
+          uri,
+          headers: _headers(),
+          body: body == null ? null : jsonEncode(body),
+        ));
     return _unwrap(resp);
   }
 
   Future<dynamic> delete(String path) async {
     final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
-    final http.Response resp = await _client.delete(uri, headers: _headers());
+    final http.Response resp = await _run(() => _client.delete(uri, headers: _headers()));
     return _unwrap(resp);
   }
 
@@ -103,8 +118,8 @@ class ApiClient {
   /// 成功返回字节；非 2xx 抛出异常（尽量解析后端 `{msg}` 错误）。
   Future<Uint8List> getBytes(String path) async {
     final Uri uri = Uri.parse('${AppConstants.apiBaseUrl}$path');
-    final http.Response resp =
-        await _client.get(uri, headers: _headers(json: false));
+    final http.Response resp = await _run(
+        () => _client.get(uri, headers: _headers(json: false)));
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
       return resp.bodyBytes;
     }
@@ -134,3 +149,19 @@ Map<String, String> _stringifyParams(Map<String, dynamic>? src) {
 
 /// 全局单例客户端。
 final ApiClient apiClient = ApiClient();
+
+/// 统一给底层 [http.Client] 调用加 [ApiTimeouts.overall] 超时。
+/// 任何 [TimeoutException] / [SocketException] / [http.ClientException] 都映射为
+/// 带中文提示的 [ApiException]，让上层 UI 能正常显示"网络异常，请重试"，
+/// 不再出现"按钮一直转圈但屏幕无反馈"的死锁体验。
+Future<http.Response> _run(Future<http.Response> Function() send) async {
+  try {
+    return await send().timeout(ApiTimeouts.overall);
+  } on TimeoutException {
+    throw const ApiException('请求超时，请检查网络或后端');
+  } on http.ClientException catch (e) {
+    throw ApiException('网络异常：${e.message}');
+  } on Exception catch (e) {
+    throw ApiException('网络异常：$e');
+  }
+}

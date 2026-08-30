@@ -15,11 +15,13 @@ import 'package:teacher_app/features/rehab/presentation/rehab_archive_detail_scr
 import 'package:teacher_app/features/rehab/presentation/autism_archive_detail_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_edit_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/child_hub_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/rehab_template_detail_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/eval_history_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/add_child_screen.dart';
 import 'package:teacher_app/features/office/office_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_items_editor_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_archive_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/offline_guidance_select_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_round_report_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_overview_report_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/vb_archive_screen.dart';
@@ -119,6 +121,14 @@ final GoRouter appRouter = GoRouter(
       path: '/children/:id',
       builder: (BuildContext context, GoRouterState state) =>
           ChildHubScreen(archiveId: state.pathParameters['id'] ?? ''),
+    ),
+    GoRoute(
+      path: '/children/:id/template',
+      builder: (BuildContext context, GoRouterState state) =>
+          RehabTemplateDetailScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        isAutism: state.uri.queryParameters['autism'] == '1',
+      ),
     ),
     GoRoute(
       path: '/add-child',
@@ -249,6 +259,15 @@ final GoRouter appRouter = GoRouter(
         archiveId: state.pathParameters['id'] ?? '',
         roundId: state.pathParameters['roundId'] ?? '',
         role: state.uri.queryParameters['role'] ?? 'TEACHER',
+      ),
+    ),
+    // 线下模板：归档后挑选「康复目标 / 指导说明」纳入报告
+    GoRoute(
+      path: '/rehab/:id/offline-guidance/:roundId',
+      builder: (BuildContext context, GoRouterState state) =>
+          OfflineGuidanceSelectScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        roundId: state.pathParameters['roundId'] ?? '',
       ),
     ),
     GoRoute(

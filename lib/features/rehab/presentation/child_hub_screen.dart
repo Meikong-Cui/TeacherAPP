@@ -211,6 +211,7 @@ class ChildHubScreen extends ConsumerWidget {
           AppSectionTitle('时间线'),
           if (rehabState.detail != null)
             ChildTimeline(
+              archiveId: archiveId,
               isAutism: isAutism,
               rehab: rehabState.detail!,
               autism: isAutism ? autismState?.detail : null,
@@ -276,106 +277,45 @@ class ChildHubScreen extends ConsumerWidget {
   }
 
   List<_HubEntry> _entries(bool isAutism, String id) {
-    if (isAutism) {
-      return <_HubEntry>[
-        // 孤独症 5+1 个独立入口（评估历史为独立卡片，点击进入独立页）。
-        const _HubEntry(
-          icon: Icons.assignment_outlined,
-          title: '评测录入',
-          subtitle: '选择量表逐题评分',
-          route: '/rehab-autism/{id}/scale-picker',
-          colorKey: 'rose',
-        ),
-        // 评估历史（孤独症专用卡片，点击进入独立页面展示 VB / OFFLINE 记录）
-        const _HubEntry(
-          icon: Icons.history_outlined,
-          title: '评估历史',
-          subtitle: 'VB 与线下模板记录',
-          route: '/rehab-autism/{id}/eval-history',
-          colorKey: 'rose',
-        ),
-        // IEP 干预计划（独立卡片）
-        const _HubEntry(
-          icon: Icons.auto_awesome_outlined,
-          title: 'IEP 干预计划',
-          subtitle: 'AI 推荐目标',
-          route: '/rehab-autism/{id}/iep',
-          colorKey: 'purple',
-        ),
-        // 月教学计划（独立卡片）
-        const _HubEntry(
-          icon: Icons.calendar_month_outlined,
-          title: '月教学计划',
-          subtitle: '六领域 × 4 周',
-          route: '/rehab-autism/{id}/monthly-plan-ai',
-          colorKey: 'amber',
-        ),
-        const _HubEntry(
-          icon: Icons.insights_outlined,
-          title: '训练效果评估表',
-          subtitle: '年度效果',
-          route: '/rehab-autism/{id}/effect',
-          colorKey: 'blue',
-        ),
-        const _HubEntry(
-          icon: Icons.pie_chart,
-          title: '评估图表',
-          subtitle: '饼图 / 折线图',
-          route: '/rehab-autism/{id}/charts',
-          colorKey: 'green',
-        ),
-      ].map((e) => _HubEntry(
-            icon: e.icon,
-            title: e.title,
-            subtitle: e.subtitle,
-            route: e.route.replaceAll('{id}', id),
-            colorKey: e.colorKey,
-          )).toList();
-    }
-    return <_HubEntry>[
-      // 听障 5 个独立入口（总览已去除，每项直达对应页）
+    // 通用模板入口：残联标准模板（所有类型均展示）；线下模板 / VB 仅孤独症。
+    final List<_HubEntry> base = <_HubEntry>[
       const _HubEntry(
-        icon: Icons.assignment_outlined,
-        title: '首次评估',
-        subtitle: '录入/查看听障评估表',
-        route: '/rehab/{id}/first-eval-edit',
+        icon: Icons.folder_special_outlined,
+        title: '残联标准模板',
+        subtitle: '月计划 / IEP / 评估等标准模块',
+        route: '/children/{id}/template?autism={autism}',
         colorKey: 'teal',
       ),
-      const _HubEntry(
-        icon: Icons.assessment_outlined,
-        title: '持续评估',
-        subtitle: '待填写 / 历次评估',
-        route: '/rehab/{id}/cont-eval-edit',
-        colorKey: 'amber',
-      ),
-      const _HubEntry(
-        icon: Icons.hearing_outlined,
-        title: '听能管理',
-        subtitle: '听力图 / 诊断记录',
-        route: '/rehab/{id}/hearing',
-        colorKey: 'blue',
-      ),
-      const _HubEntry(
-        icon: Icons.edit_calendar_outlined,
-        title: '教学计划',
-        subtitle: '每节课计划 / AI 生成',
-        route: '/rehab/{id}/plan',
-        colorKey: 'purple',
-      ),
-      const _HubEntry(
-        icon: Icons.event_note_outlined,
-        title: '评估待办',
-        subtitle: '查看提醒',
-        route: '/rehab/{id}/tasks',
-        colorKey: 'rose',
-      ),
-    ].map((e) => _HubEntry(
-          icon: e.icon,
-          title: e.title,
-          subtitle: e.subtitle,
-          route: e.route.replaceAll('{id}', id),
-          colorKey: e.colorKey,
-        )).toList();
+    ];
+    if (isAutism) {
+      base.addAll(<_HubEntry>[
+        const _HubEntry(
+          icon: Icons.offline_bolt_outlined,
+          title: '线下模板',
+          subtitle: 'OFFLINE A/B 卷评估',
+          route: '/rehab-autism/{id}/offline-home',
+          colorKey: 'rose',
+        ),
+        const _HubEntry(
+          icon: Icons.record_voice_over_outlined,
+          title: 'VB',
+          subtitle: 'VB 教师 / 家长卷',
+          route: '/rehab-autism/{id}/vb-home',
+          colorKey: 'purple',
+        ),
+      ]);
+    }
+    return base
+        .map((e) => _HubEntry(
+              icon: e.icon,
+              title: e.title,
+              subtitle: e.subtitle,
+              route: e.route
+                  .replaceAll('{id}', id)
+                  .replaceAll('{autism}', isAutism ? '1' : '0'),
+              colorKey: e.colorKey,
+            ))
+        .toList();
   }
 }
 
