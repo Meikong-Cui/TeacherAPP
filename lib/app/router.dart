@@ -123,7 +123,11 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/add-child',
       builder: (BuildContext context, GoRouterState state) =>
-          const AddChildScreen(),
+          AddChildScreen(
+            initialType: state.uri.queryParameters['type'] == 'AUTISM'
+                ? 'AUTISM'
+                : 'HEARING',
+          ),
     ),
     GoRoute(
       path: '/clock-in',

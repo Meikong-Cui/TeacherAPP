@@ -1017,7 +1017,9 @@ class _OverviewTabState extends ConsumerState<_OverviewTab> {
               subtitle: Text(p.aiGenerated ? 'AI 补全' : '手动创建', style: const TextStyle(fontSize: 11, color: Colors.black54)),
               trailing: p.aiGenerated ? const Icon(Icons.auto_awesome, size: 16, color: Colors.purple) : null,
             )).toList(),
-        actionLabel: '查看计划', action: () {}),  // 用户可手动滑动到教学计划 tab
+        // 跳转到教学计划独立页（PlanSectionScreen），完整查看各领域目标。
+        actionLabel: '查看计划',
+        action: () => context.push('/rehab/${widget.archiveId}/plan')),
 
       // ── 任务提醒 ──
       if (tasks.isNotEmpty) ...[

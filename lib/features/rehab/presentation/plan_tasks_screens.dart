@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_app/app/design_tokens.dart';
 import 'package:teacher_app/shared/ui.dart';
@@ -58,9 +57,9 @@ class PlanSectionScreen extends ConsumerWidget {
                     final DateFormat fmt = DateFormat('yyyy.MM.dd');
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
+                      // 纯查看卡片：各领域目标已完整展示，不再跳转
+                      // （原先点击会 push 回档案详情页，造成循环嵌套导航）。
                       child: SoftCard(
-                        onTap: () => context.push(
-                            '/rehab/$archiveId'),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: <Widget>[

@@ -10,7 +10,8 @@ import 'package:teacher_app/shared/ui.dart';
 
 /// 新增孩子：先录入共用的儿童/家长信息，再选择特殊教育类型创建对应模板档案。
 class AddChildScreen extends ConsumerStatefulWidget {
-  const AddChildScreen({super.key});
+  final String initialType; // 'HEARING' | 'AUTISM'，由主页卡片路由 ?type= 传入
+  const AddChildScreen({super.key, this.initialType = 'HEARING'});
 
   @override
   ConsumerState<AddChildScreen> createState() => _AddChildScreenState();
@@ -33,6 +34,13 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
   /// 孤独症档案的评测量表：STANDARD（残联标准）/ OFFLINE（线下模板）/ VB，三套相互独立。
   String _evalFormCode = 'STANDARD';
   bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // 依据主页卡片路由 ?type= 预设评测类型（HEARING / AUTISM），避免始终默认听障。
+    _templateType = widget.initialType;
+  }
 
   @override
   void dispose() {
