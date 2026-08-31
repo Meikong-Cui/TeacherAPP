@@ -1146,7 +1146,8 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
   static const List<String> _compTypes = ['助听器', '人工耳蜗', '无'];
   static const List<String> _stimStrategies = ['单侧', '双侧同步', '双侧顺次'];
   static const List<String> _commModes = ['口语', '手势', '手语', 'PECS', '混合'];
-  static const List<String> _familyStatuses = ['双亲', '单亲-父', '单亲-母', '双亡'];
+  // 注：家庭状况已改为 _familyStatusCb() 的 5 个 □（双亲/单亲/父/母/双亡），
+  // 不再是下拉；老数据「单亲-父 / 单亲-母」由 _splitFamily 兼容。
   static const List<String> _inputLangTypes = ['手语', '口语-方言', '口语-普通话'];
   static const List<String> _awarenessLevels = ['高', '中', '低'];
   static const List<String> _coopLevels = ['好', '一般', '差'];
@@ -1317,6 +1318,106 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
         ]),
       );
     }
+
+  /// 家庭状况：5 个 □ 可多选，多选以顿号连接存进 `family_status`。
+  ///
+  /// 老数据（'双亲' / '单亲-父' 等）依然能正确回显：下方 `_splitFamily` 会
+  /// 把 '单亲-父' 归一成 {'单亲','父'}。
+  Widget _familyStatusCb() {
+    const List<String> opts = <String>['双亲', '单亲', '父', '母', '双亡'];
+    final Set<String> cur = _splitFamily(_draft.familyStatus);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('家庭状况', style: TextStyle(fontSize: 13, color: Colors.black54)),
+        const SizedBox(height: 2),
+        Wrap(spacing: 12, children: opts.map((o) {
+          final bool on = cur.contains(o);
+          return Row(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(width: 18, height: 18,
+              child: Checkbox(
+                value: on,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (c) {
+                  final Set<String> s = _splitFamily(_draft.familyStatus);
+                  if (c == true) {
+                    s.add(o);
+                  } else {
+                    s.remove(o);
+                  }
+                  setState(() => _draft = _draft.copyWith(familyStatus: s.join('、')));
+                },
+              )),
+            Text(o, style: const TextStyle(fontSize: 13)),
+          ]);
+        }).toList()),
+      ]),
+    );
+  }
+
+  /// 把 family_status 拆成选项集合，兼容老的「单亲-父 / 单亲-母」写法。
+  static Set<String> _splitFamily(String v) {
+    final Set<String> out = <String>{};
+    for (final String part in v.split(RegExp(r'[、,，]'))) {
+      final String p = part.trim();
+      if (p.isEmpty) continue;
+      if (p == '单亲-父') {
+        out..add('单亲')..add('父');
+      } else if (p == '单亲-母') {
+        out..add('单亲')..add('母');
+      } else {
+        out.add(p);
+      }
+    }
+    return out;
+  }
+
+  /// 认知能力填空：写入 `domainCognition[key]`。
+  ///
+  /// key 用的是中文（'分类'/'配对'/…），与只读页 `_roPart2` 里
+  /// `_q(cg, f, f.toLowerCase())` 的读法保持一致——中文 toLowerCase 就是原串。
+  Widget _cog(String label, String key) => _tf(
+        label,
+        (_draft.domainCognition?[key] ?? '').toString(),
+        (v) => _draft = _draft.copyWith(
+            domainCognition: <String, dynamic>{...?_draft.domainCognition, key: v}),
+      );
+
+  /// 自理能力一项：纸表是「口尚未出现 / 口出现」二选一。
+  ///
+  /// 数据契约沿用只读页 `_selfCare` 的读法：写 `selfCareNote` 的
+  /// `{key}_notYet` / `{key}_appeared`（**非空即视为选中**），互斥。
+  Widget _sc(String label, String key) {
+    final Map<String, dynamic> m = _draft.selfCareNote ?? <String, dynamic>{};
+    final bool notYet = (m['${key}_notYet'] ?? '').toString().isNotEmpty;
+    final bool appeared = (m['${key}_appeared'] ?? '').toString().isNotEmpty;
+
+    void pick(String which, bool on) {
+      final Map<String, dynamic> nm = <String, dynamic>{...m};
+      nm.remove('${key}_notYet');
+      nm.remove('${key}_appeared');
+      if (on) nm['${key}_$which'] = '1';
+      setState(() => _draft = _draft.copyWith(selfCareNote: nm));
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Text(label, style: const TextStyle(fontSize: 13))),
+        for (final e in const [['尚未出现', 'notYet'], ['出现', 'appeared']])
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            SizedBox(width: 18, height: 18,
+              child: Checkbox(
+                value: e[1] == 'notYet' ? notYet : appeared,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (c) => pick(e[1], c == true),
+              )),
+            Text(e[0], style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 6),
+          ]),
+      ]),
+    );
+  }
 
   Widget _aidedThresholdGrid() {
     const freqs = ['250Hz', '500Hz', '1kHz', '2kHz', '3kHz', '4kHz'];
@@ -1608,7 +1709,9 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
       Expanded(child: _tf('联系方式', _parent('mother', 'contact'), (v) => _setParent('mother', 'contact', v))),
     ]),
     _sub('家庭情况'),
-    _dd('家庭结构', _draft.familyStatus, (v) => _draft = _draft.copyWith(familyStatus: v ?? ''), _familyStatuses),
+    // 纸表 1.1.1 上「家庭状况」是 5 个 □（可多选，如「单亲 + 父」＝单亲随父），
+    // 不是下拉单选。仍存 family_status 一列，多选以顿号连接。
+    _familyStatusCb(),
     _dd('主要输入语言类型', _draft.familyInputLangType, (v) => _draft = _draft.copyWith(familyInputLangType: v ?? ''), _inputLangTypes),
     _dd('家庭语言环境', _draft.familyLangEnv, (v) => _draft = _draft.copyWith(familyLangEnv: v ?? ''), _familyLangEnvs),
     _dd('主要照顾者', _draft.caregiver, (v) => _draft = _draft.copyWith(caregiver: v ?? ''), _caregivers),
@@ -1650,27 +1753,56 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     const Text('沟通模式', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _cbRow('沟通模式', ['非口语', '口语'], _draft.domainLanguage, 'commMode'),
     _dd('主要沟通模式', _draft.commMode, (v) => _draft = _draft.copyWith(commMode: v ?? ''), _commModes),
-    const Text('理解能力', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-    _cbRow('', ['无', '初级词汇', '中级词汇', '高级词汇'], _draft.domainLanguage, 'understandingLevel'),
-    _cbRow('', ['无'], _draft.domainLanguage, 'expressingNone'),
-    const Text('语言发展阶期', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-    _cbRow('咿呀期（简发音阶段）', [], _draft.domainLanguage, 'stageBabbling'),
-    _cbRow('儿语期（连续音节阶段）', [], _draft.domainLanguage, 'stageCooing'),
-    _cbRow('模仿期（学语萌芽阶段）', [], _draft.domainLanguage, 'stageImitate'),
-    _cbRow('单词期（单词句阶段）', [], _draft.domainLanguage, 'stageWord'),
-    _cbRow('胡语期（乱语阶段）', [], _draft.domainLanguage, 'stageJargon'),
-    _cbRow('简单词语、电报期（双词句阶段）', [], _draft.domainLanguage, 'stageTelegraphic'),
-    _cbRow('片语、句子和段落（完整句阶段）', [], _draft.domainLanguage, 'stageComplete'),
-    const Text('问句理解/表达', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-    _cbRow('不能理解 / 理解，会回答（说明:__________）', [], _draft.domainLanguage, 'questionUnderstand'),
-    _cbRow('会表达问句（说明:__________）', [], _draft.domainLanguage, 'questionExpress'),
+    const Text('理解性语言程度', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+    _cbRow('理解能力', ['无', '初级词汇', '中级词汇', '高级词汇'], _draft.domainLanguage, 'understandingLevel'),
+    const Text('表达性语言程度', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+    _cbRow('无', ['无'], _draft.domainLanguage, 'expressingNone'),
+    _cbRow('模仿复述', ['有'], _draft.domainLanguage, 'expressingImitate'),
+    _cbRow('主动表达', ['有'], _draft.domainLanguage, 'expressingActive'),
+    // 纸表 1.1.1 上这 7 行各自只有一个「□」，勾中即表示「处于该阶段」，
+    // 所以每项只给一个选项「有」；此前传的是空数组，界面连框都不渲染，
+    // 老师根本无从勾选 → domain_language 里永远没有这几个 key。
+    const Text('表达性语言发展阶段', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+    _cbRow('咿呀期（简单发音阶段）', ['有'], _draft.domainLanguage, 'stageBabbling'),
+    _cbRow('儿语期（连续音节阶段）', ['有'], _draft.domainLanguage, 'stageCooing'),
+    _cbRow('模仿期（学话萌芽阶段）', ['有'], _draft.domainLanguage, 'stageImitate'),
+    _cbRow('单字期（单词句阶段）', ['有'], _draft.domainLanguage, 'stageWord'),
+    _cbRow('胡语期（乱语阶段）', ['有'], _draft.domainLanguage, 'stageJargon'),
+    _cbRow('简单语词、电报期（双词句阶段）', ['有'], _draft.domainLanguage, 'stageTelegraphic'),
+    _cbRow('片语、句子和段落（完整句阶段）', ['有'], _draft.domainLanguage, 'stageComplete'),
+    const Text('问句能力', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+    _cbRow('问句理解', ['不能理解', '理解，会回答'], _draft.domainLanguage, 'questionUnderstand'),
+    _cbRow('问句表达', ['会表达问句'], _draft.domainLanguage, 'questionExpress'),
     _sectionTitle('言语能力'),
     const Text('发声能力', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _cbRow('能否发出声音', ['有', '无'], _draft.domainSpeech, 'canVoice'),
-    _cbRow('', ['音长短', '音高低', '音大小', '四声'], _draft.domainSpeech, 'supraSegmental'),
-    const Text('构音清晰度', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-    // 注：构音清晰度详细评估在持续评估中；此处仅保留简要说明
-    _tf('清晰度说明', '', (v) {}, maxLines: 2),
+    _cbRow('超音段', ['音长短', '音高低', '音大小', '四声'], _draft.domainSpeech, 'supraSegmental'),
+    // 纸表 1.1.1 第 2 页言语能力下是「模仿发音：口不会 / 口会（说明____）」，
+    // 没有「构音清晰度」这一栏（详细评估在持续评估里）。两处都保留：
+    // 模仿发音会被导出，清晰度说明只作 App 内部备注、不进 PDF。
+    _cbRow('模仿发音', ['不会', '会'], _draft.domainSpeech, 'imitationFlag'),
+    _tf('模仿发音说明', (_draft.domainSpeech?['imitationNote'] ?? '').toString(),
+        (v) => _draft = _draft.copyWith(
+            domainSpeech: <String, dynamic>{...?_draft.domainSpeech, 'imitationNote': v}),
+        maxLines: 2),
+    const Text('构音清晰度（纸表无此栏，仅内部备注，不导出）',
+        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+    _tf('清晰度说明', (_draft.domainSpeech?['clarityNote'] ?? '').toString(),
+        (v) => _draft = _draft.copyWith(
+            domainSpeech: <String, dynamic>{...?_draft.domainSpeech, 'clarityNote': v}),
+        maxLines: 2),
+    // ── 认知能力：纸表第 3 页是「标签：____」的填空，不是打勾 ──
+    _sectionTitle('认知能力'),
+    _cog('分类', '分类'),
+    _cog('配对', '配对'),
+    _cog('颜色', '颜色'),
+    _cog('形状', '形状'),
+    _cog('质感', '质感'),
+    _cog('数学概念', '数学概念'),
+    _cog('排序', '排序'),
+    _cog('其他思维能力', 'otherThinking'),
+    _cog('格雷费斯发育商', 'griffiths'),
+    _cog('希-内智商/学习能力商', 'binet'),
     _sectionTitle('沟通能力'),
     _cbRow('表达需求的方式', ['口语', '肢体', '其他__________'], _draft.domainCommunication, 'expressMode'),
     _cbRow('等待能力、轮替', ['可以', '不可以', '偶尔发生'], _draft.domainCommunication, 'turnTaking'),
@@ -1679,9 +1811,32 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     _cbRow('主动互动', ['无', '有__________'], _draft.domainCommunication, 'activeInteraction'),
     _cbRow('维持话题', ['无', '有__________'], _draft.domainCommunication, 'maintainTopic'),
     _cbRow('开启话题', ['无', '有__________'], _draft.domainCommunication, 'openTopic'),
-    _sectionTitle('行为/自理/家长培训'),
+    _sectionTitle('行为表现'),
     _cbRow('好奇心', ['主动', '被动'], _draft.behaviorNote, 'curiosity'),
     _cbRow('稳定性', ['稳定', '不稳定'], _draft.behaviorNote, 'stability'),
+    _cbRow('行为问题', ['无', '有'], _draft.behaviorNote, 'problemFlag'),
+    _tf('行为问题说明', (_draft.behaviorNote?['problemNote'] ?? '').toString(),
+        (v) => _draft = _draft.copyWith(
+            behaviorNote: <String, dynamic>{...?_draft.behaviorNote, 'problemNote': v}),
+        maxLines: 2),
+    // ── 自理能力：纸表第 3 页每项「口尚未出现 / 口出现」二选一 ──
+    _sectionTitle('自理能力'),
+    const Text('入厕', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+    _sc('有大小便需求时，能自己入厕', 'toiletSelf'),
+    _sc('在成人提醒下便后会用水冲洗', 'toiletRemind'),
+    const Text('进餐', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+    _sc('能使用小勺独立进餐', 'eatingSelf'),
+    _sc('餐后能主动漱口和擦嘴', 'eatingWipe'),
+    const Text('穿衣', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+    _sc('能自己穿脱简单的衣裤和鞋袜，不依赖成人', 'dressingSelf'),
+    const Text('卫生习惯', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+    _sc('能自己擦鼻涕', 'hygieneNose'),
+    _sc('饭前、便后、手脏时知道洗手', 'hygieneWash'),
+    _sc('在成人提醒下能早晚刷牙', 'hygieneBrush'),
+    const Text('安全', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+    _sc('外出时跟随成人、不乱跑', 'safetyFollow'),
+    _sc('游戏时不做危险动作', 'safetyGame'),
+    _sectionTitle('家长受训经验及教育能力'),
     _cbRow('受训经验: 已参加家长培训', ['是', '否'], _draft.parentTrainingNote, 'trained'),
     _cbRow('家长与孩子互动与游戏', ['主动', '被动'], _draft.parentTrainingNote, 'interaction'),
     _cbRow('对于孩子耳聋事件的情绪阶段', ['否认', '接受', '悲伤', '缓和'], _draft.parentTrainingNote, 'emotionStage'),
@@ -1780,6 +1935,14 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
       cognitionShapeData: m(_draft.cognitionShapeData),
       cognitionTouchData: m(_draft.cognitionTouchData),
       cognitionCompareData: m(_draft.cognitionCompareData),
+      cognitionSequenceData: m(_draft.cognitionSequenceData),
+      cognitionReasoningData: m(_draft.cognitionReasoningData),
+      cognitionAnalogyData: m(_draft.cognitionAnalogyData),
+      cognitionSynonymData: m(_draft.cognitionSynonymData),
+      cognitionAntonymData: m(_draft.cognitionAntonymData),
+      cognitionPunData: m(_draft.cognitionPunData),
+      cognitionJokeData: m(_draft.cognitionJokeData),
+      cognitionRiddleData: m(_draft.cognitionRiddleData),
       commSequenceData: m(_draft.commSequenceData),
       commBehaviorData: m(_draft.commBehaviorData),
       commStrategyData: m(_draft.commStrategyData),
@@ -1863,6 +2026,14 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
     initFrom(_draft.cognitionShapeData);
     initFrom(_draft.cognitionTouchData);
     initFrom(_draft.cognitionCompareData);
+    initFrom(_draft.cognitionSequenceData);
+    initFrom(_draft.cognitionReasoningData);
+    initFrom(_draft.cognitionAnalogyData);
+    initFrom(_draft.cognitionSynonymData);
+    initFrom(_draft.cognitionAntonymData);
+    initFrom(_draft.cognitionPunData);
+    initFrom(_draft.cognitionJokeData);
+    initFrom(_draft.cognitionRiddleData);
     initFrom(_draft.commSequenceData);
     initFrom(_draft.commBehaviorData);
     initFrom(_draft.commStrategyData);
@@ -1887,7 +2058,13 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
     syncTo(_draft.speechConsonantData); syncTo(_draft.cognitionClassifyData);
     syncTo(_draft.cognitionColorData); syncTo(_draft.cognitionNumberData);
     syncTo(_draft.cognitionShapeData); syncTo(_draft.cognitionTouchData);
-    syncTo(_draft.cognitionCompareData); syncTo(_draft.commSequenceData);
+    syncTo(_draft.cognitionCompareData);
+    syncTo(_draft.cognitionSequenceData);
+    syncTo(_draft.cognitionReasoningData); syncTo(_draft.cognitionAnalogyData);
+    syncTo(_draft.cognitionSynonymData); syncTo(_draft.cognitionAntonymData);
+    syncTo(_draft.cognitionPunData); syncTo(_draft.cognitionJokeData);
+    syncTo(_draft.cognitionRiddleData);
+    syncTo(_draft.commSequenceData);
     syncTo(_draft.commBehaviorData); syncTo(_draft.commStrategyData);
     syncTo(_draft.parentPerformanceData);
   }
@@ -1998,7 +2175,10 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
       SymbolField(label:'音节/声韵母区别',value:HearingSymbol.indexFromValue(_draft.languageVocabData!['diffWord']),onChanged:(v)=>setState(()=>_draft.languageVocabData!['diffWord']=v)),
       _sectionTitle('言语能力'),
       SymbolField(label:'音质',value:HearingSymbol.indexFromValue(_draft.speechQualityData!['natural']),onChanged:(v)=>setState(()=>_draft.speechQualityData!['natural']=v)),
-      _tf('清晰度说明',jsonStr(_draft.speechQualityData,['note']),(v){},maxLines:2),
+      // 纸表 1.1.2 的「音质」是 4 个 □，没有说明文本框；这栏只作 App 内部备注。
+      // 原来 onSaved 是空函数，老师填了根本不保存——已改为写 speechQualityData['note']。
+      _tf('清晰度说明（内部备注）',jsonStr(_draft.speechQualityData,['note']),
+          (v)=>setState(()=>_draft.speechQualityData!['note']=v),maxLines:2),
       _sectionTitle('认知能力'),
       SymbolField(label:'基础颜色辨认',value:HearingSymbol.indexFromValue(_draft.cognitionColorData!['basic']),onChanged:(v)=>setState(()=>_draft.cognitionColorData!['basic']=v)),
       SymbolField(label:'扩展颜色辨认',value:HearingSymbol.indexFromValue(_draft.cognitionColorData!['extended']),onChanged:(v)=>setState(()=>_draft.cognitionColorData!['extended']=v)),
@@ -2042,6 +2222,30 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
     SymbolField(label:'币值的概念',value:HearingSymbol.indexFromValue(_draft.cognitionNumberData!['money']),onChanged:(v)=>setState(()=>_draft.cognitionNumberData!['money']=v)),
     SymbolField(label:'触觉1',value:HearingSymbol.indexFromValue(_draft.cognitionTouchData!['texture1']),onChanged:(v)=>setState(()=>_draft.cognitionTouchData!['texture1']=v)),
     SymbolField(label:'触觉2',value:HearingSymbol.indexFromValue(_draft.cognitionTouchData!['texture2']),onChanged:(v)=>setState(()=>_draft.cognitionTouchData!['texture2']=v)),
+    // ── 认知第二批（纸表 1.1.2 第 6 页）：顺序/推理/语言游戏 ──
+    _sectionTitle('认知能力（顺序与推理）'),
+    SymbolField(label:'顺序概念：在家中的一些事情(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['homeEvents']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['homeEvents']=v)),
+    SymbolField(label:'顺序概念：简单的手指游戏(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['fingerGame']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['fingerGame']=v)),
+    SymbolField(label:'顺序概念：形状、数量(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['shapeQty']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['shapeQty']=v)),
+    SymbolField(label:'顺序概念：旅游（相片）(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['travelPhotos']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['travelPhotos']=v)),
+    SymbolField(label:'顺序概念：有顺序之指令(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['seqInstructions']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['seqInstructions']=v)),
+    SymbolField(label:'顺序概念：含2~3个段落的故事',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['story23']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['story23']=v)),
+    SymbolField(label:'顺序概念：听故事及顺序(4岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['storyListen']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['storyListen']=v)),
+    SymbolField(label:'顺序概念：童谣、儿歌(4岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['rhymes']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['rhymes']=v)),
+    SymbolField(label:'顺序概念：以不同顺序发展一则故事(5岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['storyDevelop']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['storyDevelop']=v)),
+    SymbolField(label:'顺序概念：故事接龙(开始/中间/结局)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['storyChain']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['storyChain']=v)),
+    SymbolField(label:'顺序概念：包含语法的顺序描述(6岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['grammarSeq']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['grammarSeq']=v)),
+    SymbolField(label:'推理：事件推理',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['event']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['event']=v)),
+    SymbolField(label:'推理：时间推理',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['time']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['time']=v)),
+    SymbolField(label:'推理：字词推理',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['word']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['word']=v)),
+    SymbolField(label:'推理：找原因',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['cause']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['cause']=v)),
+    _sectionTitle('认知能力（词汇与语言游戏）'),
+    SymbolField(label:'类推',value:HearingSymbol.indexFromValue(_draft.cognitionAnalogyData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionAnalogyData!['level']=v)),
+    SymbolField(label:'同义词',value:HearingSymbol.indexFromValue(_draft.cognitionSynonymData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionSynonymData!['level']=v)),
+    SymbolField(label:'相反词',value:HearingSymbol.indexFromValue(_draft.cognitionAntonymData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionAntonymData!['level']=v)),
+    SymbolField(label:'双关语',value:HearingSymbol.indexFromValue(_draft.cognitionPunData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionPunData!['level']=v)),
+    SymbolField(label:'笑话',value:HearingSymbol.indexFromValue(_draft.cognitionJokeData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionJokeData!['level']=v)),
+    SymbolField(label:'谜语',value:HearingSymbol.indexFromValue(_draft.cognitionRiddleData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionRiddleData!['level']=v)),
   ]);
 
   // ═══ Cont Eval Part 3 ═══

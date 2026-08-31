@@ -608,6 +608,16 @@ class RehabRepository {
     return data;
   }
 
+  /// VB 评估报告（维度得分表 + 柱状图）PDF/DOCX，返回字节流（带鉴权）。
+  /// 后端 GET /autism/vb/report?roundId=&format=
+  Future<Uint8List> getVbReportPdf(String roundId, {String format = 'pdf'}) async {
+    return apiClient.getBytes(
+      '$_autismPath/vb/report'
+      '?roundId=${Uri.encodeQueryComponent(roundId)}'
+      '&format=${Uri.encodeQueryComponent(format)}',
+    );
+  }
+
   // ════════════════════════════════════════════════════════════════
   //  IEP 个别化教育计划（后端 oa-rehab /iep 接口）
   // ════════════════════════════════════════════════════════════════

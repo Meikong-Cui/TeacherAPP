@@ -57,6 +57,17 @@ class VbArchiveHome extends ConsumerWidget {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.assessment),
+                        label: const Text('评测详情'),
+                        onPressed: () => context.push(
+                          '/rehab-autism/$archiveId/vb-detail?form=$code&label=${Uri.encodeQueryComponent(label)}',
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

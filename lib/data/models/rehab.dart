@@ -553,8 +553,17 @@ class RehabContEval {
     this.cognitionShapeData,          // JSON: 形状
     this.cognitionTouchData,          // JSON: 触觉感知
     this.cognitionCompareData,        // JSON: 比较与对照
+    // ── 认知第二批：纸表 1.1.2 第 6 页共 14 项认知，上面只有 6 项 ──
+    this.cognitionSequenceData,       // JSON: 顺序概念
+    this.cognitionReasoningData,      // JSON: 推理/预测
+    this.cognitionAnalogyData,        // JSON: 类推
+    this.cognitionSynonymData,        // JSON: 同义词
+    this.cognitionAntonymData,        // JSON: 相反词
+    this.cognitionPunData,            // JSON: 双关语
+    this.cognitionJokeData,           // JSON: 笑话
+    this.cognitionRiddleData,         // JSON: 谜语
     // ── 沟通（JSON）──
-    this.commSequenceData,           // JSON: 顺序概念
+    this.commSequenceData,           // JSON: 顺序概念（历史列名，实为认知域，暂未使用）
     this.commBehaviorData,           // JSON: 沟通行为
     this.commStrategyData,           // JSON: 沟通策略(高级12项)
     // ── 家长表现（JSON）──
@@ -620,6 +629,15 @@ class RehabContEval {
   final Map<String, dynamic>? cognitionShapeData;
   final Map<String, dynamic>? cognitionTouchData;
   final Map<String, dynamic>? cognitionCompareData;
+  // 认知第二批（纸表第 6 页）
+  final Map<String, dynamic>? cognitionSequenceData;
+  final Map<String, dynamic>? cognitionReasoningData;
+  final Map<String, dynamic>? cognitionAnalogyData;
+  final Map<String, dynamic>? cognitionSynonymData;
+  final Map<String, dynamic>? cognitionAntonymData;
+  final Map<String, dynamic>? cognitionPunData;
+  final Map<String, dynamic>? cognitionJokeData;
+  final Map<String, dynamic>? cognitionRiddleData;
 
   // 沟通 JSON
   final Map<String, dynamic>? commSequenceData;
@@ -675,6 +693,14 @@ class RehabContEval {
       case 'cogNumber': return cognitionNumberData;
       case 'cogShape': return cognitionShapeData;
       case 'cogTouch': return cognitionTouchData;
+      case 'cogSequence': return cognitionSequenceData;
+      case 'cogReasoning': return cognitionReasoningData;
+      case 'cogAnalogy': return cognitionAnalogyData;
+      case 'cogSynonym': return cognitionSynonymData;
+      case 'cogAntonym': return cognitionAntonymData;
+      case 'cogPun': return cognitionPunData;
+      case 'cogJoke': return cognitionJokeData;
+      case 'cogRiddle': return cognitionRiddleData;
       case 'cogCompare': return cognitionCompareData;
       case 'commSequence': return commSequenceData;
       case 'commBehavior': return commBehaviorData;
@@ -721,6 +747,14 @@ class RehabContEval {
         cognitionShapeData: _parseJson(j['cognitionShapeData']),
         cognitionTouchData: _parseJson(j['cognitionTouchData']),
         cognitionCompareData: _parseJson(j['cognitionCompareData']),
+        cognitionSequenceData: _parseJson(j['cognitionSequenceData']),
+        cognitionReasoningData: _parseJson(j['cognitionReasoningData']),
+        cognitionAnalogyData: _parseJson(j['cognitionAnalogyData']),
+        cognitionSynonymData: _parseJson(j['cognitionSynonymData']),
+        cognitionAntonymData: _parseJson(j['cognitionAntonymData']),
+        cognitionPunData: _parseJson(j['cognitionPunData']),
+        cognitionJokeData: _parseJson(j['cognitionJokeData']),
+        cognitionRiddleData: _parseJson(j['cognitionRiddleData']),
         commSequenceData: _parseJson(j['commSequenceData']),
         commBehaviorData: _parseJson(j['commBehaviorData']),
         commStrategyData: _parseJson(j['commStrategyData']),
@@ -773,6 +807,14 @@ class RehabContEval {
         if (cognitionShapeData != null) 'cognitionShapeData': jsonEncode(cognitionShapeData),
         if (cognitionTouchData != null) 'cognitionTouchData': jsonEncode(cognitionTouchData),
         if (cognitionCompareData != null) 'cognitionCompareData': jsonEncode(cognitionCompareData),
+        if (cognitionSequenceData != null) 'cognitionSequenceData': jsonEncode(cognitionSequenceData),
+        if (cognitionReasoningData != null) 'cognitionReasoningData': jsonEncode(cognitionReasoningData),
+        if (cognitionAnalogyData != null) 'cognitionAnalogyData': jsonEncode(cognitionAnalogyData),
+        if (cognitionSynonymData != null) 'cognitionSynonymData': jsonEncode(cognitionSynonymData),
+        if (cognitionAntonymData != null) 'cognitionAntonymData': jsonEncode(cognitionAntonymData),
+        if (cognitionPunData != null) 'cognitionPunData': jsonEncode(cognitionPunData),
+        if (cognitionJokeData != null) 'cognitionJokeData': jsonEncode(cognitionJokeData),
+        if (cognitionRiddleData != null) 'cognitionRiddleData': jsonEncode(cognitionRiddleData),
         if (commSequenceData != null) 'commSequenceData': jsonEncode(commSequenceData),
         if (commBehaviorData != null) 'commBehaviorData': jsonEncode(commBehaviorData),
         if (commStrategyData != null) 'commStrategyData': jsonEncode(commStrategyData),
@@ -828,6 +870,14 @@ class RehabContEval {
     Map<String, dynamic>? cognitionShapeData,
     Map<String, dynamic>? cognitionTouchData,
     Map<String, dynamic>? cognitionCompareData,
+    Map<String, dynamic>? cognitionSequenceData,
+    Map<String, dynamic>? cognitionReasoningData,
+    Map<String, dynamic>? cognitionAnalogyData,
+    Map<String, dynamic>? cognitionSynonymData,
+    Map<String, dynamic>? cognitionAntonymData,
+    Map<String, dynamic>? cognitionPunData,
+    Map<String, dynamic>? cognitionJokeData,
+    Map<String, dynamic>? cognitionRiddleData,
     Map<String, dynamic>? commSequenceData,
     Map<String, dynamic>? commBehaviorData,
     Map<String, dynamic>? commStrategyData,
@@ -883,6 +933,14 @@ class RehabContEval {
         cognitionShapeData: cognitionShapeData ?? this.cognitionShapeData,
         cognitionTouchData: cognitionTouchData ?? this.cognitionTouchData,
         cognitionCompareData: cognitionCompareData ?? this.cognitionCompareData,
+        cognitionSequenceData: cognitionSequenceData ?? this.cognitionSequenceData,
+        cognitionReasoningData: cognitionReasoningData ?? this.cognitionReasoningData,
+        cognitionAnalogyData: cognitionAnalogyData ?? this.cognitionAnalogyData,
+        cognitionSynonymData: cognitionSynonymData ?? this.cognitionSynonymData,
+        cognitionAntonymData: cognitionAntonymData ?? this.cognitionAntonymData,
+        cognitionPunData: cognitionPunData ?? this.cognitionPunData,
+        cognitionJokeData: cognitionJokeData ?? this.cognitionJokeData,
+        cognitionRiddleData: cognitionRiddleData ?? this.cognitionRiddleData,
         commSequenceData: commSequenceData ?? this.commSequenceData,
         commBehaviorData: commBehaviorData ?? this.commBehaviorData,
         commStrategyData: commStrategyData ?? this.commStrategyData,

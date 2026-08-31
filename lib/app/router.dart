@@ -27,6 +27,7 @@ import 'package:teacher_app/features/rehab/presentation/offline_eval_guidance_se
 import 'package:teacher_app/features/rehab/presentation/offline_round_report_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_overview_report_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/vb_archive_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/vb_detail_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/scale_picker_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_charts_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_effect_screen.dart';
@@ -236,6 +237,15 @@ final GoRouter appRouter = GoRouter(
       builder: (BuildContext context, GoRouterState state) => VbTrendScreen(
         archiveId: state.pathParameters['id'] ?? '',
         formCode: state.uri.queryParameters['form'] ?? 'VB_PARENT',
+      ),
+    ),
+    GoRoute(
+      // VB 评测详情：最新一轮作答计分 → 维度得分表 + 儿童情况说明 + 导出报告。
+      path: '/rehab-autism/:id/vb-detail',
+      builder: (BuildContext context, GoRouterState state) => VbDetailScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        formCode: state.uri.queryParameters['form'] ?? 'VB_PARENT',
+        formLabel: state.uri.queryParameters['label'] ?? '家长卷',
       ),
     ),
     GoRoute(
