@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/audiogram_chart.dart';
+import 'package:teacher_app/features/rehab/presentation/widgets/export_pdf_button.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
-import 'package:teacher_app/features/rehab/services/hearing_record_pdf.dart';
 import 'package:teacher_app/features/rehab/services/chart_export.dart';
 
 /// 听能管理记录 Tab（位于教学计划右侧）。
@@ -84,10 +84,15 @@ class _HearingRecordTabState extends ConsumerState<HearingRecordTab> {
             Text('评估日期：${fmt(r.evalDate)}',
                 style: const TextStyle(fontWeight: FontWeight.w600)),
             Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(
-                icon: const Icon(Icons.picture_as_pdf, size: 20),
+              // 后端生成：1.2.1 听障儿童听能诊断记录扫描件 + 叠字，与 OA 网页同一份。
+              ExportPdfButton(
+                iconOnly: true,
                 tooltip: '导出记录 PDF',
-                onPressed: () => exportHearingRecordToPdf(r),
+                enabled: r.id.isNotEmpty,
+                filename: '听能管理记录_${r.name ?? ''}_${fmt(r.evalDate)}.pdf',
+                fetchBytes: () => ref
+                    .read(rehabRepositoryProvider)
+                    .exportHearingRecordPdf(r.id),
               ),
               IconButton(
                 icon: const Icon(Icons.image, size: 20),

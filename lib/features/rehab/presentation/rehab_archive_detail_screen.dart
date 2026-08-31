@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/ai_lesson_plan/data/ai_lesson_plan_repository.dart';
 import 'package:teacher_app/features/rehab/presentation/hearing_record_tab.dart';
+import 'package:teacher_app/features/rehab/presentation/widgets/export_pdf_button.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/hearing_symbol.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
@@ -123,6 +124,18 @@ class _RehabArchiveDetailScreenState
     return Scaffold(
       appBar: AppBar(
         title: Text(state.detail?.archive.childName ?? '档案详情'),
+        actions: <Widget>[
+          // 整档导出：首次 + 持续 + 听能 + 计划合订本，与 OA 网页同一份官方表单。
+          ExportPdfButton(
+            iconOnly: true,
+            tooltip: '导出整档 PDF',
+            filename:
+                '听障康复档案_${state.detail?.archive.childName ?? widget.archiveId}.pdf',
+            fetchBytes: () => ref
+                .read(rehabRepositoryProvider)
+                .exportHearingArchivePdf(widget.archiveId),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -181,11 +194,25 @@ class _FirstEvalTabState extends ConsumerState<_FirstEvalTab> {
     return Stack(children: [
       _ReadOnlyView(fe: fe, onEdit: () {}),
       Positioned(bottom: 16, right: 16,
-        child: FloatingActionButton.small(
-          onPressed: () => context.push('/rehab/${widget.archiveId}/first-eval-edit'),
-          heroTag: 'edit_first_eval',
-          child: const Icon(Icons.edit, size: 18),
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ExportPdfButton(
+            fab: true,
+            heroTag: 'export_first_eval',
+            tooltip: '导出首次评估 PDF',
+            filename: '听障首次评估_${fe.name.isEmpty ? widget.archiveId : fe.name}.pdf',
+            // 后端按 firstEvalId 出 PDF，未保存的记录没有 id。
+            enabled: fe.id != null && fe.id!.isNotEmpty,
+            fetchBytes: () => ref
+                .read(rehabRepositoryProvider)
+                .exportHearingFirstEvalPdf(fe.id!),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.small(
+            onPressed: () => context.push('/rehab/${widget.archiveId}/first-eval-edit'),
+            heroTag: 'edit_first_eval',
+            child: const Icon(Icons.edit, size: 18),
+          ),
+        ]),
       ),
     ]);
   }
@@ -515,11 +542,22 @@ class _ContEvalTabState extends ConsumerState<_ContEvalTab> {
               ],
               const SizedBox(height: 8),
               Align(alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  // 带上 evalId 才会加载这条记录进行编辑，否则会新建一条。
-                  onPressed: () => context.push(
-                      '/rehab/${widget.archiveId}/cont-eval-edit?evalId=${c.id ?? ''}'),
-                  icon: const Icon(Icons.edit, size: 16), label: const Text('编辑'))),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  ExportPdfButton(
+                    label: '导出 PDF',
+                    enabled: c.id != null && c.id!.isNotEmpty,
+                    filename: '听障持续评估_${detail?.archive.childName ?? ''}_'
+                        '${c.evalDate == null ? '' : DateFormat('yyyyMMdd').format(c.evalDate!)}.pdf',
+                    fetchBytes: () => ref
+                        .read(rehabRepositoryProvider)
+                        .exportHearingContEvalPdf(c.id!),
+                  ),
+                  TextButton.icon(
+                    // 带上 evalId 才会加载这条记录进行编辑，否则会新建一条。
+                    onPressed: () => context.push(
+                        '/rehab/${widget.archiveId}/cont-eval-edit?evalId=${c.id ?? ''}'),
+                    icon: const Icon(Icons.edit, size: 16), label: const Text('编辑')),
+                ])),
             ],
           ),
         ),
@@ -616,6 +654,15 @@ class _PlanTabState extends ConsumerState<_PlanTab> {
               if (p.otherGoal.isNotEmpty) _goalRow('其他', p.otherGoal),
               const SizedBox(height: 8),
               Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                if (p.id != null && p.id!.isNotEmpty)
+                  ExportPdfButton(
+                    label: '导出 PDF',
+                    filename: '听障教学计划_${detail?.archive.childName ?? ''}_'
+                        '${p.planPeriodStart == null ? '' : DateFormat('yyyyMMdd').format(p.planPeriodStart!)}.pdf',
+                    fetchBytes: () => ref
+                        .read(rehabRepositoryProvider)
+                        .exportHearingPlanPdf(p.id!),
+                  ),
                 if (p.id != null && p.id!.isNotEmpty)
                   TextButton.icon(
                     onPressed: () => _confirmDelete(p.id!, context),
