@@ -22,6 +22,7 @@ import 'package:teacher_app/features/office/office_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_items_editor_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_archive_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_guidance_select_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/offline_eval_guidance_select_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_round_report_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_overview_report_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/vb_archive_screen.dart';
@@ -203,9 +204,28 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/rehab/:id/offline-eval-report',
-      builder: (BuildContext context, GoRouterState state) => OfflineEvalReportScreen(
+      builder: (BuildContext context, GoRouterState state) {
+        final String rowsParam = state.uri.queryParameters['rows'] ?? '';
+        final Set<String> selectedRows = rowsParam.isEmpty
+            ? const <String>{}
+            : rowsParam
+                .split(',')
+                .map(Uri.decodeQueryComponent)
+                .where((s) => s.isNotEmpty)
+                .toSet();
+        return OfflineEvalReportScreen(
+          archiveId: state.pathParameters['id'] ?? '',
+          type: state.uri.queryParameters['type'] ?? 'TEACHER',
+          title: state.uri.queryParameters['title'] ?? '评估报告',
+          selectedRows: selectedRows,
+        );
+      },
+    ),
+    GoRoute(
+      path: '/rehab/:id/offline-eval-guidance',
+      builder: (BuildContext context, GoRouterState state) => OfflineEvalGuidanceSelectScreen(
         archiveId: state.pathParameters['id'] ?? '',
-        type: state.uri.queryParameters['type'] ?? 'TEACHER',
+        role: state.uri.queryParameters['type'] ?? 'TEACHER',
         title: state.uri.queryParameters['title'] ?? '评估报告',
       ),
     ),

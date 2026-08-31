@@ -189,7 +189,7 @@ class _OfflineArchiveHomeState extends ConsumerState<OfflineArchiveHome> {
           ],
         ),
         onTap: () => context.push(
-            '/rehab/${widget.archiveId}/offline-eval-report?type=$type&title=${Uri.encodeQueryComponent(title)}'),
+            '/rehab/${widget.archiveId}/offline-eval-guidance?type=$type&title=${Uri.encodeQueryComponent(title)}'),
       ),
     );
   }
@@ -774,11 +774,13 @@ class OfflineEvalReportScreen extends ConsumerStatefulWidget {
     required this.archiveId,
     required this.type,
     required this.title,
+    this.selectedRows = const <String>{},
     super.key,
   });
   final String archiveId;
   final String type;
   final String title;
+  final Set<String> selectedRows;
 
   @override
   ConsumerState<OfflineEvalReportScreen> createState() =>
@@ -792,10 +794,13 @@ class _OfflineEvalReportScreenState extends ConsumerState<OfflineEvalReportScree
   bool _exporting = false;
   String? _error;
 
+  late final Set<String> _selectedRows;
+
   @override
   void initState() {
     super.initState();
     _role = widget.type == 'PARENT' ? 'PARENT' : 'TEACHER';
+    _selectedRows = Set<String>.from(widget.selectedRows);
     _load();
   }
 
@@ -811,6 +816,17 @@ class _OfflineEvalReportScreenState extends ConsumerState<OfflineEvalReportScree
       _error = '加载失败：$e';
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  List<dynamic> get _filteredRows {
+    final dynamic rows = _content?['rows'];
+    if (rows is! List) return const <dynamic>[];
+    if (_selectedRows.isEmpty) return rows;
+    return rows.where((r) {
+      if (r is! Map<String, dynamic>) return false;
+      final String project = r['project']?.toString() ?? '';
+      return _selectedRows.contains(project);
+    }).toList();
   }
 
   Future<void> _exportPdf() async {
@@ -890,11 +906,10 @@ class _OfflineEvalReportScreenState extends ConsumerState<OfflineEvalReportScree
   }
 
   Widget _buildReport() {
-    final dynamic rows = _content?['rows'];
-    if (rows is! List || rows.isEmpty) {
+    final List<dynamic> rowList = _filteredRows;
+    if (rowList.isEmpty) {
       return const Center(child: Text('暂无报告内容（请先完成 B 卷答题）'));
     }
-    final List<dynamic> rowList = rows;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
