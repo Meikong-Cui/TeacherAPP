@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 import 'package:teacher_app/data/models/autism_archive.dart';
 import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
+import 'package:teacher_app/features/rehab/presentation/offline_subitem_parser.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 /// 线下模板评估（OFFLINE）首页：6 个卡片入口。
@@ -774,13 +775,16 @@ class OfflineEvalReportScreen extends ConsumerStatefulWidget {
     required this.archiveId,
     required this.type,
     required this.title,
-    this.selectedRows = const <String>{},
+    this.selectedItems,
     super.key,
   });
   final String archiveId;
   final String type;
   final String title;
-  final Set<String> selectedRows;
+
+  /// 所选小项：project -> { 'rehabGoal': [idx...], 'guidance': [idx...] }。
+  /// 为 null 时展示报告全量（所有小项）。
+  final Map<String, Map<String, List<int>>>? selectedItems;
 
   @override
   ConsumerState<OfflineEvalReportScreen> createState() =>
@@ -794,13 +798,13 @@ class _OfflineEvalReportScreenState extends ConsumerState<OfflineEvalReportScree
   bool _exporting = false;
   String? _error;
 
-  late final Set<String> _selectedRows;
+  Map<String, Map<String, List<int>>>? _selectedItems;
 
   @override
   void initState() {
     super.initState();
     _role = widget.type == 'PARENT' ? 'PARENT' : 'TEACHER';
-    _selectedRows = Set<String>.from(widget.selectedRows);
+    _selectedItems = widget.selectedItems;
     _load();
   }
 
@@ -821,20 +825,27 @@ class _OfflineEvalReportScreenState extends ConsumerState<OfflineEvalReportScree
   List<dynamic> get _filteredRows {
     final dynamic rows = _content?['rows'];
     if (rows is! List) return const <dynamic>[];
-    if (_selectedRows.isEmpty) return rows;
-    return rows.where((r) {
-      if (r is! Map<String, dynamic>) return false;
-      final String project = r['project']?.toString() ?? '';
-      return _selectedRows.contains(project);
-    }).toList();
+    return rows;
+  }
+
+  /// 按所选小项过滤某一字段（康复目标 / 指导说明）的文本。
+  String _filterField(String project, String field, String text) {
+    final Map<String, List<int>>? sel = _selectedItems?[project];
+    if (sel == null) return text;
+    final List<int>? indices = sel[field];
+    if (indices == null) return text;
+    return filterSubItems(text, Set<int>.from(indices));
   }
 
   Future<void> _exportPdf() async {
     setState(() => _exporting = true);
     try {
+      final String? itemsParam = _selectedItems == null
+          ? null
+          : encodeSelectedItems(_selectedItems!);
       final Uint8List bytes = await ref
           .read(rehabRepositoryProvider)
-          .getOfflineEvalReportPdf(widget.archiveId, _role);
+          .getOfflineEvalReportPdf(widget.archiveId, _role, itemsParam: itemsParam);
       final String name =
           '${_role == 'TEACHER' ? '教师版' : '家长版'}评估报告_${widget.archiveId}.pdf';
       await Printing.sharePdf(bytes: bytes, filename: name);
@@ -943,12 +954,16 @@ class _OfflineEvalReportScreenState extends ConsumerState<OfflineEvalReportScree
                   r is Map<String, dynamic> ? r : <String, dynamic>{};
               final String project = row['project']?.toString() ?? '';
               final bool isSelf = project == '个人自理';
+              final String rehabGoal =
+                  _filterField(project, 'rehabGoal', row['rehabGoal']?.toString() ?? '');
+              final String guidance =
+                  _filterField(project, 'guidance', row['guidance']?.toString() ?? '');
               return TableRow(
                 children: <Widget>[
                   _Td(project, bold: true),
                   _Td(row['refAge']?.toString() ?? ''),
-                  _Td(row['rehabGoal']?.toString() ?? ''),
-                  _Td(row['guidance']?.toString() ?? ''),
+                  _Td(rehabGoal),
+                  _Td(guidance),
                 ],
                 decoration: isSelf
                     ? BoxDecoration(color: Colors.blue.shade50)

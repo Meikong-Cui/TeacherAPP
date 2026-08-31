@@ -21,6 +21,7 @@ import 'package:teacher_app/features/rehab/presentation/add_child_screen.dart';
 import 'package:teacher_app/features/office/office_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_items_editor_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_archive_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/offline_subitem_parser.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_guidance_select_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_eval_guidance_select_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_round_report_screen.dart';
@@ -205,19 +206,13 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/rehab/:id/offline-eval-report',
       builder: (BuildContext context, GoRouterState state) {
-        final String rowsParam = state.uri.queryParameters['rows'] ?? '';
-        final Set<String> selectedRows = rowsParam.isEmpty
-            ? const <String>{}
-            : rowsParam
-                .split(',')
-                .map(Uri.decodeQueryComponent)
-                .where((s) => s.isNotEmpty)
-                .toSet();
+        final Map<String, Map<String, List<int>>>? selectedItems =
+            decodeSelectedItems(state.uri.queryParameters['items']);
         return OfflineEvalReportScreen(
           archiveId: state.pathParameters['id'] ?? '',
           type: state.uri.queryParameters['type'] ?? 'TEACHER',
           title: state.uri.queryParameters['title'] ?? '评估报告',
-          selectedRows: selectedRows,
+          selectedItems: selectedItems,
         );
       },
     ),

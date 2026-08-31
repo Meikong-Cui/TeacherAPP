@@ -508,14 +508,18 @@ class RehabRepository {
   }
 
   /// 9 行评估报告 PDF（返回字节流，教师版/家长版）。
-  /// 后端 GET /autism/offline/eval-report/pdf?archiveId=&type=
+  /// [itemsParam] 为 URL 编码后的小项选择 JSON；为 null 时按全量导出。
+  /// 后端 GET /autism/offline/eval-report/pdf?archiveId=&type=&items=
   Future<Uint8List> getOfflineEvalReportPdf(
-      String archiveId, String type) async {
-    return apiClient.getBytes(
-      '$_autismPath/offline/eval-report/pdf'
+      String archiveId, String type, {String? itemsParam}) async {
+    final StringBuffer qs = StringBuffer(
       '?archiveId=${Uri.encodeQueryComponent(archiveId)}'
       '&type=${Uri.encodeQueryComponent(type)}',
     );
+    if (itemsParam != null && itemsParam.isNotEmpty) {
+      qs.write('&items=$itemsParam');
+    }
+    return apiClient.getBytes('$_autismPath/offline/eval-report/pdf$qs');
   }
 
   /// 归档当前线下模板草稿为新一轮评估，返回轮次 id（int）。
@@ -546,12 +550,14 @@ class RehabRepository {
     return data;
   }
 
-  /// 保存某轮评估报告「康复目标 / 指导说明」的勾选结果（project 名称列表）。
+  /// 保存某轮评估报告「康复目标 / 指导说明」的小项勾选结果。
+  /// [items] 结构：project -> { 'rehabGoal': [序号...], 'guidance': [序号...] }。
   /// 后端 POST /autism/offline/rounds/{id}/guidance
-  Future<void> saveOfflineRoundGuidance(String roundId, List<String> rows) async {
+  Future<void> saveOfflineRoundGuidance(
+      String roundId, Map<String, Map<String, List<int>>> items) async {
     await apiClient.post(
       '$_autismPath/offline/rounds/${Uri.encodeQueryComponent(roundId)}/guidance',
-      <String, dynamic>{'rows': rows},
+      <String, dynamic>{'items': items},
     );
   }
 
@@ -718,4 +724,37 @@ class RehabRepository {
   Future<Uint8List> exportIepPdf(String archiveId) async {
     return apiClient.getBytes('$_iepPath/plans/$archiveId/export/pdf');
   }
+
+  // ══════════════════════════════════════════════════════════════════
+  //  听障档案导出（后端生成：扫描件模板逐页叠字 → PDF）
+  //
+  //  与 OA 网页用的是同一批接口，导出的就是那套官方表单（1.1.1 首次评估 /
+  //  1.2.1 听能诊断记录等），不是 App 本地另拼的版式。
+  //  端点见 RehabController：GET /api/rehab/hearing/export/...
+  // ══════════════════════════════════════════════════════════════════
+
+  /// 整档（首次 + 持续 + 听能 + 计划）合订本。
+  Future<Uint8List> exportHearingArchivePdf(String archiveId) =>
+      apiClient.getBytes(
+          '${AppConstants.rehabPath}/hearing/export/$archiveId?format=pdf');
+
+  /// 单项：首次评估。
+  Future<Uint8List> exportHearingFirstEvalPdf(String firstEvalId) =>
+      apiClient.getBytes(
+          '${AppConstants.rehabPath}/hearing/export/first-eval/$firstEvalId?format=pdf');
+
+  /// 单项：持续评估。
+  Future<Uint8List> exportHearingContEvalPdf(String contEvalId) =>
+      apiClient.getBytes(
+          '${AppConstants.rehabPath}/hearing/export/cont-eval/$contEvalId?format=pdf');
+
+  /// 单项：听能管理记录。
+  Future<Uint8List> exportHearingRecordPdf(String recordId) =>
+      apiClient.getBytes(
+          '${AppConstants.rehabPath}/hearing/export/hearing-record/$recordId?format=pdf');
+
+  /// 单项：教学计划。
+  Future<Uint8List> exportHearingPlanPdf(String planId) =>
+      apiClient.getBytes(
+          '${AppConstants.rehabPath}/hearing/export/plan/$planId?format=pdf');
 }
