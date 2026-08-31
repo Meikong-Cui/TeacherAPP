@@ -27,7 +27,7 @@ class Campus {
     defaultCampus,
     Campus(
       id: 2,
-      name: '道里小区',
+      name: '道里校区',
       isDefault: false,
       latitude: 45.732986,
       longitude: 126.587281,
