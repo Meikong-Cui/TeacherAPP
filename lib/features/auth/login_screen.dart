@@ -35,12 +35,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       await const AuthRepository()
           .login(_userController.text.trim(), _pwdController.text);
       if (!mounted) return;
-      // 用真实姓名更新当前用户（仅展示用，其余信息保留演示数据）。
-      final String? name = AuthStore.instance.userName;
-      if (name != null && name.isNotEmpty) {
+      // 拉取后端真实用户信息（/api/me）覆盖本地 demo 默认（林嘉怡）。
+      try {
+        final TeacherUser me = await const AuthRepository().fetchMe();
         ref.read(currentUserProvider.notifier).state =
-            ref.read(currentUserProvider).copyWith(name: name);
+            ref.read(currentUserProvider).copyWith(
+                  name: me.name,
+                  role: me.role,
+                  center: me.center,
+                  avatar: me.avatar,
+                );
+      } catch (_) {
+        // 兜底：退回到 JWT 中的姓名声明。
+        final String? name = AuthStore.instance.userName;
+        if (name != null && name.isNotEmpty) {
+          ref.read(currentUserProvider.notifier).state =
+              ref.read(currentUserProvider).copyWith(name: name);
+        }
       }
+      if (!mounted) return;
       ref.read(authChangedProvider.notifier).state++;
       context.go('/');
     } on ApiException catch (e) {

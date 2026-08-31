@@ -15,11 +15,11 @@ class TeacherUser {
   final String avatar;
 
   static const TeacherUser demo = TeacherUser(
-    name: '林嘉怡',
+    name: '教师',
     role: '康复教师',
     dept: '感知认知组',
     center: '呼兰校区',
-    avatar: '林',
+    avatar: '教',
   );
 
   TeacherUser copyWith({
