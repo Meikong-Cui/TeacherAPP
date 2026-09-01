@@ -24,6 +24,18 @@ class PlanSectionScreen extends ConsumerWidget {
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
                 color: AppPalette.ink)),
+        // 任何时刻都能手动新建教学计划，不依赖 AI 何时生成。
+        actions: <Widget>[
+          TextButton.icon(
+            onPressed: () => _createPlan(context, ref),
+            icon: const Icon(Icons.add, size: 18, color: AppPalette.brandDark),
+            label: const Text('新建教学计划',
+                style: TextStyle(
+                    color: AppPalette.brandDark,
+                    fontWeight: FontWeight.w600)),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: st.loading && st.detail == null
           ? const Center(child: CircularProgressIndicator())
@@ -32,19 +44,27 @@ class PlanSectionScreen extends ConsumerWidget {
                   child: SoftCard(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
-                      children: const <Widget>[
-                        Icon(Icons.menu_book_outlined,
+                      children: <Widget>[
+                        const Icon(Icons.menu_book_outlined,
                             size: 56, color: AppPalette.inkMute),
-                        SizedBox(height: 12),
-                        Text('暂无教学计划',
+                        const SizedBox(height: 12),
+                        const Text('暂无教学计划',
                             style: TextStyle(
                                 fontSize: AppFontSize.title,
                                 fontWeight: FontWeight.bold)),
-                        SizedBox(height: 4),
-                        Text('可在档案详情首次评估后使用 AI 自动生成',
+                        const SizedBox(height: 4),
+                        const Text(
+                            '可在档案详情首次评估后使用 AI 自动生成，也可手动新建',
                             style: TextStyle(
                                 fontSize: AppFontSize.small,
                                 color: AppPalette.inkMute)),
+                        const SizedBox(height: 16),
+                        // 空态主 CTA：即使无首次评估也能立刻开始。
+                        FilledButton.icon(
+                          onPressed: () => _createPlan(context, ref),
+                          icon: const Icon(Icons.add, size: 18),
+                          label: const Text('新建教学计划'),
+                        ),
                       ],
                     ),
                   ),
@@ -107,6 +127,36 @@ class PlanSectionScreen extends ConsumerWidget {
                   },
                 ),
     );
+  }
+
+  /// 手动新建教学计划：与 `rehab_archive_detail_screen._createPlan` 同语义，
+  /// 默认起止时间=今天 ~ 今天+60 天，可立刻在弹窗或档案页里继续编辑。
+  Future<void> _createPlan(BuildContext context, WidgetRef ref) async {
+    final DateTime now = DateTime.now();
+    final RehabTeachingPlan plan = RehabTeachingPlan(
+      archiveId: archiveId,
+      planPeriodStart: now,
+      planPeriodEnd: now.add(const Duration(days: 60)),
+      teacherName: '教师',
+    );
+    try {
+      final bool ok = await ref
+          .read(rehabArchiveDetailProvider(archiveId).notifier)
+          .createPlan(plan);
+      if (!context.mounted) return;
+      // 本页没监听 state.message，所以主动弹一下；同时清掉 message 避免
+      // 用户跳回档案详情页时再被 ref.listen 重复弹出。
+      ref
+          .read(rehabArchiveDetailProvider(archiveId).notifier)
+          .clearMessage();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok ? '教学计划已新建' : '新建失败，请稍后再试'),
+      ));
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('新建失败：$e')));
+    }
   }
 
   Widget _goalLine(String label, String value) => Padding(
