@@ -70,7 +70,8 @@ class RehabTemplateDetailScreen extends StatelessWidget {
           icon: Icons.assignment_outlined,
           title: '评测量表',
           subtitle: '选择量表逐题评分',
-          route: '/rehab-autism/{id}/scale-picker',
+          // 残联标准模板内直接进入 STANDARD 量表，跳过量表选择页（无需选模板）。
+          route: '/rehab-autism/{id}/items?form=STANDARD',
           colorKey: 'rose',
         ),
         const _ModuleEntry(

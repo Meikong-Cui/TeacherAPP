@@ -71,6 +71,11 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
           .showSnackBar(const SnackBar(content: Text('请填写儿童姓名')));
       return;
     }
+    if (_birthDate == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('请选择出生日期')));
+      return;
+    }
     setState(() => _submitting = true);
     try {
       final RehabArchive archive = RehabArchive(
@@ -143,7 +148,7 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
                 children: <Widget>[
                   TextFormField(
                     controller: _nameCtrl,
-                    decoration: const InputDecoration(labelText: '儿童姓名'),
+                    decoration: const InputDecoration(labelText: '儿童姓名 *'),
                     validator: (v) => v == null || v.trim().isEmpty ? '必填' : null,
                   ),
                   const SizedBox(height: 12),
@@ -160,16 +165,19 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
                         ),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(
+Expanded(
                         child: InkWell(
-                          onTap: () => _pickDate(true),
-                          child: InputDecorator(
-                            decoration: const InputDecoration(labelText: '出生日期'),
-                            child: Text(_birthDate == null
-                                ? '请选择'
-                                : DateFormat('yyyy-MM-dd').format(_birthDate!)),
+                            onTap: () => _pickDate(true),
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: '出生日期 *',
+                                errorText: null,
+                              ),
+                              child: Text(_birthDate == null
+                                  ? '请选择'
+                                  : DateFormat('yyyy-MM-dd').format(_birthDate!)),
+                            ),
                           ),
-                        ),
                       ),
                     ],
                   ),

@@ -312,6 +312,10 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
   /// 儿童生理月龄（月），用于 B卷 按年龄隐藏题项；null 表示未知（不隐藏）。
   int? _ageMonths;
   bool _filteredByAge = false;
+  /// 一键答题循环下标：第一次点击全填 codes[0]，第二次 codes[1]，第三次 codes[2]，
+  /// 然后回到 codes[0]；不包含 N（用户在 issue 1 中明确「不自动填写 N」）。
+  int _cycleIdx = 0;
+  List<String> _cycleCodes = const <String>[];
 
   @override
   void initState() {
@@ -415,15 +419,20 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
       await ref
           .read(rehabRepositoryProvider)
           .saveOfflineAnswers(widget.archiveId, widget.paper, items, roundId: widget.roundId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已保存，正在出分…')));
-        await _autoScore();
-      }
+      if (!mounted) return;
+      // Issue 1+2：保存即「提交」，不再自动弹分数框；改为引导到下一步。
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已提交，正在出分…')));
+      final String nextRoute = widget.paper == 'A'
+          // A卷 提交 → 紧接着答 B卷（同路由，仅 paper 改变）。
+          ? '/rehab/${widget.archiveId}/offline-answer?paper=B'
+          // B卷 提交 → 进入 A/B 卷评估结果（可编辑 + 一键导出报告）。
+          : '/rehab/${widget.archiveId}/offline-result';
+      context.pushReplacement(nextRoute);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('保存失败：$e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('保存失败：$e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -456,6 +465,65 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
           SnackBar(content: Text('保存成功，但出分失败：$e')),
         );
       }
+    } finally {
+      if (mounted) context.pop();
+    }
+  }
+
+  /// 一键填充全部题项并保存出分。
+  Future<void> _fillAndSave(String code) async {
+    setState(() {
+      for (final Map<String, dynamic> it in _items) {
+        final int id = _toInt(it['id']) ?? 0;
+        if (id != 0) _draft[id] = code;
+      }
+    });
+    await _save();
+  }
+
+  String _formatScore(Map<String, dynamic> data) {
+    final StringBuffer sb = StringBuffer();
+    data.forEach((k, v) {
+      if (v is Map) {
+        sb.writeln('$k:');
+        v.forEach((k2, v2) => sb.writeln('  $k2 = $v2'));
+      } else if (v is List) {
+        sb.writeln('$k: (${v.length} 项)');
+      } else {
+        sb.writeln('$k = $v');
+      }
+    });
+    return sb.toString().trim();
+  }
+
+  /// 保存成功后自动拉取出分并弹窗展示（A 卷总分/7领域，B 卷最大通过段）。
+  Future<void> _autoScore() async {
+    final RehabRepository repo = ref.read(rehabRepositoryProvider);
+    try {
+      final Map<String, dynamic> data = widget.paper == 'A'
+          ? await repo.getOfflineAOverview(widget.archiveId)
+          : await repo.getOfflineBResult(widget.archiveId);
+      if (!mounted) return;
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('${widget.paper} 卷已自动出分'),
+          content: SingleChildScrollView(child: Text(_formatScore(data))),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('完成'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('保存成功，但出分失败：$e')),
+      );
     } finally {
       if (mounted) context.pop();
     }

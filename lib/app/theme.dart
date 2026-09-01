@@ -68,6 +68,10 @@ class AppTheme {
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.md),
+          // 暗色模式下 surface 与背景同色，加描边以区分卡片边界
+          side: isDark
+              ? BorderSide(color: scheme.outline, width: 1)
+              : BorderSide.none,
         ),
         color: scheme.surface,
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 0),

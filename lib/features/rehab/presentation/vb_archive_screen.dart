@@ -1,80 +1,200 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/autism_line_chart.dart';
 import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
 
-/// VB（Vanderbilt）首页：家长卷 / 教师卷 两套，分别可「作答」与「查看趋势」。
-class VbArchiveHome extends ConsumerWidget {
+/// VB（Vanderbilt）首页：家长卷 / 教师卷 两套。
+/// 顶部「新建评估 / 查看历史评估」分段：新建用于作答，历史列出所有轮次并可回看得分与报告。
+const List<(String, String)> _vbForms = <(String, String)>[
+  ('VB_PARENT', '家长卷'),
+  ('VB_TEACHER', '教师卷'),
+];
+
+class VbArchiveHome extends ConsumerStatefulWidget {
   const VbArchiveHome({required this.archiveId, super.key});
   final String archiveId;
 
-  static const List<(String, String)> _forms = <(String, String)>[
-    ('VB_PARENT', '家长卷'),
-    ('VB_TEACHER', '教师卷'),
-  ];
+  @override
+  ConsumerState<VbArchiveHome> createState() => _VbArchiveHomeState();
+}
+
+class _VbArchiveHomeState extends ConsumerState<VbArchiveHome> {
+  bool _history = false;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final Color primary = Theme.of(context).colorScheme.primary;
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('VB（Vanderbilt 评估）')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          for (final (String code, String label) in _forms)
-            Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(label,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.edit),
-                            label: const Text('作答'),
-                            onPressed: () => context.push(
-                              '/rehab-autism/$archiveId/items?form=$code',
+          SegmentedButton<bool>(
+            segments: const <ButtonSegment<bool>>[
+              ButtonSegment(value: false, label: Text('新建评估')),
+              ButtonSegment(value: true, label: Text('查看历史评估')),
+            ],
+            selected: <bool>{_history},
+            onSelectionChanged: (s) => setState(() => _history = s.first),
+          ),
+          const SizedBox(height: 12),
+          if (!_history)
+            for (final (String code, String label) in _vbForms)
+              Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(label,
+                          style: const TextStyle(
+                              fontSize: 16, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.edit),
+                              label: const Text('作答'),
+                              onPressed: () => context.push(
+                                '/rehab-autism/${widget.archiveId}/items?form=$code',
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: Icon(Icons.show_chart, color: primary),
-                            label: const Text('查看趋势'),
-                            onPressed: () => context.push(
-                              '/rehab-autism/$archiveId/vb-trend?form=$code',
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.show_chart),
+                              label: const Text('查看趋势'),
+                              onPressed: () => context.push(
+                                '/rehab-autism/${widget.archiveId}/vb-trend?form=$code',
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.assessment),
-                        label: const Text('评测详情'),
-                        onPressed: () => context.push(
-                          '/rehab-autism/$archiveId/vb-detail?form=$code&label=${Uri.encodeQueryComponent(label)}',
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.assessment),
+                          label: const Text('评测详情'),
+                          onPressed: () => context.push(
+                            '/rehab-autism/${widget.archiveId}/vb-detail?form=$code&label=${Uri.encodeQueryComponent(label)}',
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ),
+              )
+          else
+            VbHistoryList(archiveId: widget.archiveId),
         ],
       ),
     );
+  }
+}
+
+/// VB 历史评估列表：按卷列出所有轮次，点击任一轮次进入「评测详情」（得分表 + 报告）。
+class VbHistoryList extends ConsumerStatefulWidget {
+  const VbHistoryList({required this.archiveId, super.key});
+  final String archiveId;
+
+  @override
+  ConsumerState<VbHistoryList> createState() => _VbHistoryListState();
+}
+
+class _VbHistoryListState extends ConsumerState<VbHistoryList> {
+  bool _loading = true;
+  String? _error;
+  final Map<String, List<AutismEvalRound>> _byForm =
+      <String, List<AutismEvalRound>>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    try {
+      final RehabRepository repo = ref.read(rehabRepositoryProvider);
+      final Map<String, List<AutismEvalRound>> map =
+          <String, List<AutismEvalRound>>{};
+      for (final (String code, String label) in _vbForms) {
+        map[code] = await repo.listEvalRounds(widget.archiveId, code);
+      }
+      if (!mounted) return;
+      _byForm
+        ..clear()
+        ..addAll(map);
+      setState(() => _loading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('加载失败：$_error', style: const TextStyle(color: Colors.grey)),
+        ),
+      );
+    }
+    final bool any = _byForm.values.any((l) => l.isNotEmpty);
+    if (!any) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Text('尚无评估记录，请先在「新建评估」中作答。',
+            style: TextStyle(color: Colors.grey)),
+      );
+    }
+    final List<Widget> cards = <Widget>[];
+    for (final (String code, String label) in _vbForms) {
+      final List<AutismEvalRound> rounds = _byForm[code] ?? const <AutismEvalRound>[];
+      if (rounds.isEmpty) continue;
+      cards.add(Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(label,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              ...rounds.map((AutismEvalRound r) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text('第${r.evalSeq ?? '?'}次'
+                        '${r.evalDate != null ? '（${r.evalDate}）' : ''}'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push(
+                      '/rehab-autism/${widget.archiveId}/vb-detail'
+                      '?form=$code&label=${Uri.encodeQueryComponent(label)}'
+                      '&round=${r.id}',
+                    ),
+                  )),
+            ],
+          ),
+        ),
+      ));
+    }
+    return Column(children: cards);
   }
 }
 

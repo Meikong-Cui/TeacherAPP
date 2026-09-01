@@ -291,7 +291,7 @@ class ChildHubScreen extends ConsumerWidget {
       base.addAll(<_HubEntry>[
         const _HubEntry(
           icon: Icons.offline_bolt_outlined,
-          title: '线下模板',
+          title: 'C-PEP3',
           subtitle: 'OFFLINE A/B 卷评估',
           route: '/rehab-autism/{id}/offline-home',
           colorKey: 'rose',

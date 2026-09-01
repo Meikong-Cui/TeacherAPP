@@ -246,6 +246,7 @@ final GoRouter appRouter = GoRouter(
         archiveId: state.pathParameters['id'] ?? '',
         formCode: state.uri.queryParameters['form'] ?? 'VB_PARENT',
         formLabel: state.uri.queryParameters['label'] ?? '家长卷',
+        roundId: state.uri.queryParameters['round'],
       ),
     ),
     GoRoute(

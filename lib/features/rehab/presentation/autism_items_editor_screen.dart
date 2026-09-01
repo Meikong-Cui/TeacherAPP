@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:printing/printing.dart';
 import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/data/autism_questions.dart';
 import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
@@ -233,6 +234,41 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
                 onPressed: () => Navigator.of(ctx).pop(),
                 child: const Text('知道了'),
               ),
+              TextButton.icon(
+                icon: const Icon(Icons.picture_as_pdf),
+                label: const Text('导出报告'),
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  try {
+                    final Uint8List bytes = await ref
+                        .read(rehabRepositoryProvider)
+                        .getVbReportPdf(_roundId!);
+                    await Printing.sharePdf(
+                      bytes: bytes,
+                      filename:
+                          'VB报告_${_formShortLabel()}_第${score['evalSeq'] ?? ''}次.pdf',
+                    );
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('导出失败：$e')),
+                      );
+                    }
+                  }
+                },
+              ),
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.push(
+                    '/rehab-autism/${widget.archiveId}/vb-detail'
+                    '?form=$_formCode'
+                    '&label=${Uri.encodeQueryComponent(_formShortLabel())}'
+                    '&round=$_roundId',
+                  );
+                },
+                child: const Text('查看完整详情'),
+              ),
             ],
           ),
         );
@@ -304,6 +340,40 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
       }
     }
     return out;
+  }
+
+  /// 一键选择：每点一次把所有题切到各自选项的下一个（按选项列表循环）。
+  void _cycleAll() {
+    final List<AutismEvalFormItem>? items =
+        ref.read(evalFormItemsProvider(_formCode)).value;
+    if (items == null) return;
+    final List<_Node> tree =
+        _formCode.startsWith('VB') ? _vbTree(items) : _buildTree(items);
+    final List<_Node> leaves = _leaves(tree);
+    setState(() {
+      for (final _Node node in leaves) {
+        final String key = '${node.item.areaKey ?? 'other'}|${node.item.itemCode}';
+        final List<String> choices = node.item.options.isNotEmpty
+            ? node.item.options.map((o) => o.code).toList()
+            : const <String>['P', 'F'];
+        if (choices.isEmpty) continue;
+        final int idx = choices.indexOf(_draft[key]);
+        _draft[key] = choices[(idx + 1) % choices.length];
+      }
+    });
+  }
+
+  String _formShortLabel() {
+    switch (_formCode) {
+      case 'VB_PARENT':
+        return '家长卷';
+      case 'VB_TEACHER':
+        return '教师卷';
+      case 'VB':
+        return 'VB';
+      default:
+        return _formCode;
+    }
   }
 
   @override
@@ -387,6 +457,18 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
               onCreate: _createRound,
               onSelect: _loadRound,
             ),
+            if (_formCode.startsWith('VB'))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.flash_on),
+                    label: const Text('一键选择（每点一次所有题切到下一选项）'),
+                    onPressed: _cycleAll,
+                  ),
+                ),
+              ),
             const SizedBox(height: 12),
             if (_roundId == null || _roundId!.isEmpty)
               const Center(

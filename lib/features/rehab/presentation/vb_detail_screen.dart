@@ -17,11 +17,13 @@ class VbDetailScreen extends ConsumerStatefulWidget {
     required this.archiveId,
     this.formCode = 'VB_PARENT',
     this.formLabel = '家长卷',
+    this.roundId,
     super.key,
   });
   final String archiveId;
   final String formCode;
   final String formLabel;
+  final String? roundId;
 
   @override
   ConsumerState<VbDetailScreen> createState() => _VbDetailScreenState();
@@ -38,12 +40,15 @@ class _VbDetailScreenState extends ConsumerState<VbDetailScreen> {
     if (rounds.isEmpty) {
       return <String, dynamic>{'rounds': const <AutismEvalRound>[], 'score': null};
     }
-    final AutismEvalRound latest = rounds.last;
-    final String rid = latest.id?.toString() ?? '';
+    // 未指定轮次则取最新一次；指定了则按 roundId 精确定位（历史查看）
+    final AutismEvalRound target = widget.roundId != null && widget.roundId!.isNotEmpty
+        ? (rounds.where((r) => r.id?.toString() == widget.roundId).firstOrNull ?? rounds.last)
+        : rounds.last;
+    final String rid = target.id?.toString() ?? '';
     final Map<String, dynamic> score = await repo.vbScore(rid);
     return <String, dynamic>{
       'rounds': rounds,
-      'round': latest,
+      'round': target,
       'roundId': rid,
       'score': score,
     };
