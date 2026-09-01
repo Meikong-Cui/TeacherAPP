@@ -76,6 +76,11 @@ class ChildHubScreen extends ConsumerWidget {
         title: Text(archive.childName.isEmpty ? '儿童档案' : archive.childName),
         actions: <Widget>[
           IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: '编辑儿童信息',
+            onPressed: () => context.push('/children/$archiveId/edit'),
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '刷新',
             onPressed: () {

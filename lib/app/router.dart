@@ -18,6 +18,7 @@ import 'package:teacher_app/features/rehab/presentation/child_hub_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/rehab_template_detail_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/eval_history_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/add_child_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/edit_child_screen.dart';
 import 'package:teacher_app/features/office/office_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_items_editor_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_archive_screen.dart';
@@ -143,6 +144,13 @@ final GoRouter appRouter = GoRouter(
           ),
     ),
     GoRoute(
+      path: '/children/:id/edit',
+      builder: (BuildContext context, GoRouterState state) =>
+          EditChildScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+      ),
+    ),
+    GoRoute(
       path: '/clock-in',
       builder: (BuildContext context, GoRouterState state) =>
           const ClockInScreen(),
@@ -202,6 +210,16 @@ final GoRouter appRouter = GoRouter(
       path: '/rehab/:id/offline-result',
       builder: (BuildContext context, GoRouterState state) => OfflineResultScreen(
         archiveId: state.pathParameters['id'] ?? '',
+      ),
+    ),
+    GoRoute(
+      // 引导式流程终点：B 卷提交并自动归档后展示得分与报告入口，
+      // 退出时回到儿童详情页 /children/:id（见 OfflineSubmitResultScreen）。
+      path: '/rehab/:id/offline-submit',
+      builder: (BuildContext context, GoRouterState state) =>
+          OfflineSubmitResultScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        roundId: state.uri.queryParameters['round'],
       ),
     ),
     GoRoute(

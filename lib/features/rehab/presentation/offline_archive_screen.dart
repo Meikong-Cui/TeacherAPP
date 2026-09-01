@@ -9,11 +9,12 @@ import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_subitem_parser.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
-/// 线下模板评估（OFFLINE）首页：6 个卡片入口。
+/// 线下模板评估（OFFLINE）首页：引导式入口（issue 2）。
 ///
-/// - 填写 A 卷答案 / 填写 B 卷答案：线下纸质题本评估后录入题号对应选项（无题干）。
-/// - A/B 卷评估结果（可编辑）：汇总 7 领域得分与适应年龄当量，保存后自动生成 3 份报告。
-/// - 评估报告 / 教师康复指导 / 家长康复指导：查看自动生成的报告。
+/// 只保留两件事，避免功能平铺让用户不知道点哪里：
+/// 1. 顶部大卡片「新建评估」→ 答 A 卷 → 提交 → 答 B 卷 → 提交 → 评估结果页
+///    （得分 + 报告入口；退出回到儿童详情页）。
+/// 2. 下方「历史评估记录」：每次提交自动归档一轮，可回看答案 / 教师版 / 家长版 / 总览报告。
 class OfflineArchiveHome extends ConsumerStatefulWidget {
   const OfflineArchiveHome({required this.archiveId, super.key});
   final String archiveId;
@@ -23,10 +24,8 @@ class OfflineArchiveHome extends ConsumerStatefulWidget {
 }
 
 class _OfflineArchiveHomeState extends ConsumerState<OfflineArchiveHome> {
-  List<Map<String, dynamic>> _reports = <Map<String, dynamic>>[];
   List<Map<String, dynamic>> _rounds = <Map<String, dynamic>>[];
   bool _loading = true;
-  bool _archiving = false;
 
   @override
   void initState() {
@@ -36,111 +35,78 @@ class _OfflineArchiveHomeState extends ConsumerState<OfflineArchiveHome> {
 
   Future<void> _load() async {
     try {
-      final RehabRepository repo = ref.read(rehabRepositoryProvider);
-      _reports = await repo.listOfflineReports(widget.archiveId);
-      _rounds = await repo.listOfflineRounds(widget.archiveId);
+      _rounds = await ref
+          .read(rehabRepositoryProvider)
+          .listOfflineRounds(widget.archiveId);
     } catch (_) {
-      // 报告未生成时后端返回空列表，忽略异常。
+      // 历史记录为空时后端返回空列表，忽略异常。
     }
     if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _archive() async {
-    if (_archiving) return;
-    setState(() => _archiving = true);
-    try {
-      final int roundId = await ref
-          .read(rehabRepositoryProvider)
-          .createOfflineRound(widget.archiveId);
-      if (!mounted) return;
-      // 归档后进入「康复目标 / 指导说明」挑选页，老师勾选需纳入报告的项。
-      context.push(
-          '/rehab/${widget.archiveId}/offline-guidance/$roundId');
-      _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('归档失败：$e')));
-    } finally {
-      if (mounted) setState(() => _archiving = false);
-    }
-  }
-
-  bool _hasReport(String type) {
-    // 新 9 行评估报告类型：TEACHER→EVAL_REPORT_T，PARENT→EVAL_REPORT_P
-    final String rt = type == 'TEACHER' ? 'EVAL_REPORT_T' : 'EVAL_REPORT_P';
-    return _reports.any((r) => r['reportType'] == rt);
-  }
-
   @override
   Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(title: const Text('线下模板评估')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          Card(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: ListTile(
-              leading: _archiving
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(Icons.archive_outlined,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer),
-              title: Text('保存为新一轮评估',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.onPrimaryContainer)),
-              subtitle: Text('将当前 A/B 卷答案与报告归档为一份不可变记录',
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.onPrimaryContainer)),
-              trailing: const Icon(Icons.chevron_right,
-                  color: Colors.white70),
-              onTap: _archiving ? null : _archive,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _sectionTitle(context, '答题'),
-          _card(
-            context,
-            Icons.edit_document,
-            '填写 A 卷答案',
-            '线下纸质题本评估后录入 A 卷题号对应选项',
-            () => context.push(
-                '/rehab/${widget.archiveId}/offline-answer?paper=A'),
-          ),
-          _card(
-            context,
-            Icons.edit_document,
-            '填写 B 卷答案',
-            '线下纸质题本评估后录入 B 卷题号对应选项',
-            () => context.push(
-                '/rehab/${widget.archiveId}/offline-answer?paper=B'),
-          ),
-          _sectionTitle(context, '评估结果与报告'),
-          _card(
-            context,
-            Icons.analytics,
-            'A/B 卷评估结果（可编辑）',
-            '汇总 7 领域得分与适应年龄当量，保存后自动生成报告',
-            () => context.push('/rehab/${widget.archiveId}/offline-result'),
-          ),
-          _reportCard(context, '教师版评估报告', 'TEACHER', Icons.school),
-          _reportCard(context, '家长版评估报告', 'PARENT', Icons.family_restroom),
-          _card(
-            context,
-            Icons.insights,
-            '发展总览报告',
-            'A 卷得分总览计数 + 发展功能剖面图',
-            () => context.push(
-                '/rehab/${widget.archiveId}/offline-overview'),
-          ),
+          // Issue 2：入口收紧为一个大「新建评估」按钮（与历史记录分开），
+          // 后续按 A → B → 提交 → 评估结果 顺序引导用户完成一轮评估。
+          _bigStartCard(context, colors),
+          const SizedBox(height: 16),
           _sectionTitle(context, '历史评估记录'),
           _roundsSection(context),
         ],
+      ),
+    );
+  }
+
+  /// Issue 2 引入的大尺寸「新建评估」入口卡片：从 A 卷答题开始走完一轮。
+  Widget _bigStartCard(BuildContext context, ColorScheme colors) {
+    return Card(
+      color: colors.primary,
+      elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push(
+            '/rehab/${widget.archiveId}/offline-answer?paper=A'),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 56,
+                height: 56,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.add_circle_outline,
+                    color: Colors.white, size: 32),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const <Widget>[
+                    Text('新建评估',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 20)),
+                    SizedBox(height: 6),
+                    Text('答 A/B 卷 → 提交后自动出分并查看报告',
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.white),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -156,45 +122,6 @@ class _OfflineArchiveHomeState extends ConsumerState<OfflineArchiveHome> {
         ),
       );
 
-  Widget _card(BuildContext context, IconData icon, String title, String subtitle,
-      VoidCallback onTap) {
-    final Color primary = Theme.of(context).colorScheme.primary;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Icon(icon, color: primary),
-        title: Text(title),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
-    );
-  }
-
-  Widget _reportCard(
-      BuildContext context, String title, String type, IconData icon) {
-    final Color primary = Theme.of(context).colorScheme.primary;
-    final bool generated = _hasReport(type);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Icon(icon, color: primary),
-        title: Text(title),
-        subtitle: Text(generated ? '已生成' : '完成 B 卷答题后自动生成'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            if (generated)
-              const Icon(Icons.check_circle, color: Colors.green, size: 18),
-            const Icon(Icons.chevron_right),
-          ],
-        ),
-        onTap: () => context.push(
-            '/rehab/${widget.archiveId}/offline-eval-guidance?type=$type&title=${Uri.encodeQueryComponent(title)}'),
-      ),
-    );
-  }
-
   Widget _roundsSection(BuildContext context) {
     if (_loading) {
       return const Padding(
@@ -206,7 +133,8 @@ class _OfflineArchiveHomeState extends ConsumerState<OfflineArchiveHome> {
       return Card(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Text('暂无历史评估记录，完成评估后点上方「保存为新一轮评估」归档。',
+          child: Text('暂无历史评估记录。点上方「新建评估」答 A/B 卷并提交，'
+              '本次评估会自动出现在这里。',
               style: Theme.of(context).textTheme.bodyMedium
                   ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         ),
@@ -312,10 +240,9 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
   /// 儿童生理月龄（月），用于 B卷 按年龄隐藏题项；null 表示未知（不隐藏）。
   int? _ageMonths;
   bool _filteredByAge = false;
-  /// 一键答题循环下标：第一次点击全填 codes[0]，第二次 codes[1]，第三次 codes[2]，
-  /// 然后回到 codes[0]；不包含 N（用户在 issue 1 中明确「不自动填写 N」）。
+  /// 一键答题循环下标：0→P/A，1→E/M，2→F/S，然后绕回 0。
+  /// 不包含 N（N 表示无机会/不适用，须老师手动判定，不自动填写）。
   int _cycleIdx = 0;
-  List<String> _cycleCodes = const <String>[];
 
   @override
   void initState() {
@@ -423,12 +350,27 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
       // Issue 1+2：保存即「提交」，不再自动弹分数框；改为引导到下一步。
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已提交，正在出分…')));
-      final String nextRoute = widget.paper == 'A'
-          // A卷 提交 → 紧接着答 B卷（同路由，仅 paper 改变）。
-          ? '/rehab/${widget.archiveId}/offline-answer?paper=B'
-          // B卷 提交 → 进入 A/B 卷评估结果（可编辑 + 一键导出报告）。
-          : '/rehab/${widget.archiveId}/offline-result';
-      context.pushReplacement(nextRoute);
+      if (widget.paper == 'A') {
+        // A卷 提交 → 紧接着答 B卷（同路由，仅 paper 改变）。
+        context.pushReplacement(
+            '/rehab/${widget.archiveId}/offline-answer?paper=B');
+        return;
+      }
+      // B卷 提交 → 新一轮评估自动归档（这样历史记录里能看到本次评估），
+      // 再进入「评估结果」页看得分与导出报告。回看历史轮次时不重复归档。
+      int? roundId;
+      if (widget.roundId == null) {
+        try {
+          roundId = await ref
+              .read(rehabRepositoryProvider)
+              .createOfflineRound(widget.archiveId);
+        } catch (_) {
+          // 归档失败不阻断出分：结果页按无轮次处理（只是历史记录不新增）。
+        }
+      }
+      if (!mounted) return;
+      final String qs = roundId == null ? '' : '?round=$roundId';
+      context.pushReplacement('/rehab/${widget.archiveId}/offline-submit$qs');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -438,152 +380,60 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
     }
   }
 
-  /// 保存成功后自动拉取出分并弹窗展示（A 卷总分/7领域，B 卷最大通过段）。
-  Future<void> _autoScore() async {
-    final RehabRepository repo = ref.read(rehabRepositoryProvider);
-    try {
-      final Map<String, dynamic> data = widget.paper == 'A'
-          ? await repo.getOfflineAOverview(widget.archiveId)
-          : await repo.getOfflineBResult(widget.archiveId);
-      if (!mounted) return;
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('${widget.paper} 卷已自动出分'),
-          content: SingleChildScrollView(child: Text(_formatScore(data))),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('完成'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存成功，但出分失败：$e')),
-        );
-      }
-    } finally {
-      if (mounted) context.pop();
-    }
-  }
+  /// 一键答题循环档位：与每题选项顺序一一对应（0/1/2）。
+  static const List<String> _cycleLabelsA = <String>['P / A', 'E / M', 'F / S'];
+  static const List<String> _cycleLabelsB =
+      <String>['独立完成', '协助完成', '不能完成'];
 
-  /// 一键填充全部题项并保存出分。
-  Future<void> _fillAndSave(String code) async {
+  /// 某题的可选 code 列表（过滤掉 N）。
+  List<String> _cycleCodesOf(Map<String, dynamic> item) =>
+      _options(item).map((o) => o.$1).where((c) => c != 'N').toList();
+
+  /// 一键循环填写：仅填选项，不触发保存/出分（出分由右上角「提交」按钮触发）。
+  ///
+  /// 档位按**每题自己的选项顺序**取，跳过 N：
+  /// - 第 1 次点击 → P / A / 独立完成
+  /// - 第 2 次点击 → E / M / 协助完成
+  /// - 第 3 次点击 → F / S / 不能完成
+  ///
+  /// A 卷里「感觉模式」题是 A/M/S/N，其余题是 P/E/F——若统一取首题选项会把
+  /// P 填进只有 A/M/S/N 的题里，故逐题取自己那一档，保证 code 一定合法。
+  void _cycleFill() {
+    final List<String> labels =
+        widget.paper == 'A' ? _cycleLabelsA : _cycleLabelsB;
+    final int pos = _cycleIdx % labels.length;
     setState(() {
-      for (final Map<String, dynamic> it in _items) {
+      for (final Map<String, dynamic> it in _visibleItems) {
         final int id = _toInt(it['id']) ?? 0;
-        if (id != 0) _draft[id] = code;
+        if (id == 0) continue;
+        final List<String> codes = _cycleCodesOf(it);
+        if (codes.isEmpty) continue;
+        _draft[id] = codes[pos < codes.length ? pos : codes.length - 1];
       }
+      _cycleIdx = (_cycleIdx + 1) % labels.length;
     });
-    await _save();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('已一键全选「${labels[pos]}」，确认后点右上角「提交」出分'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
-  String _formatScore(Map<String, dynamic> data) {
-    final StringBuffer sb = StringBuffer();
-    data.forEach((k, v) {
-      if (v is Map) {
-        sb.writeln('$k:');
-        v.forEach((k2, v2) => sb.writeln('  $k2 = $v2'));
-      } else if (v is List) {
-        sb.writeln('$k: (${v.length} 项)');
-      } else {
-        sb.writeln('$k = $v');
-      }
-    });
-    return sb.toString().trim();
-  }
-
-  /// 保存成功后自动拉取出分并弹窗展示（A 卷总分/7领域，B 卷最大通过段）。
-  Future<void> _autoScore() async {
-    final RehabRepository repo = ref.read(rehabRepositoryProvider);
-    try {
-      final Map<String, dynamic> data = widget.paper == 'A'
-          ? await repo.getOfflineAOverview(widget.archiveId)
-          : await repo.getOfflineBResult(widget.archiveId);
-      if (!mounted) return;
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('${widget.paper} 卷已自动出分'),
-          content: SingleChildScrollView(child: Text(_formatScore(data))),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('完成'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('保存成功，但出分失败：$e')),
-      );
-    } finally {
-      if (mounted) context.pop();
-    }
-  }
-
-  /// 一键填充全部题项并保存出分。
-  Future<void> _fillAndSave(String code) async {
-    setState(() {
-      for (final Map<String, dynamic> it in _items) {
-        final int id = _toInt(it['id']) ?? 0;
-        if (id != 0) _draft[id] = code;
-      }
-    });
-    await _save();
-  }
-
-  String _formatScore(Map<String, dynamic> data) {
-    final StringBuffer sb = StringBuffer();
-    data.forEach((k, v) {
-      if (v is Map) {
-        sb.writeln('$k:');
-        v.forEach((k2, v2) => sb.writeln('  $k2 = $v2'));
-      } else if (v is List) {
-        sb.writeln('$k: (${v.length} 项)');
-      } else {
-        sb.writeln('$k = $v');
-      }
-    });
-    return sb.toString().trim();
-  }
-
-  /// 一键答题快捷按钮区（A 卷全选 P/F；B 卷全选 独立完成）。
+  /// 一键答题按钮（单按钮循环切换档位，issue 1）。
   Widget _buildQuickFill() {
-    if (widget.paper == 'A') {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: <Widget>[
-            FilledButton.icon(
-              icon: const Icon(Icons.flash_on),
-              label: const Text('一键全选 P（通过）'),
-              onPressed: _saving ? null : () => _fillAndSave('P'),
-            ),
-            FilledButton.icon(
-              icon: const Icon(Icons.flash_on),
-              label: const Text('一键全选 F（0分）'),
-              onPressed: _saving ? null : () => _fillAndSave('F'),
-            ),
-          ],
-        ),
-      );
-    }
+    final List<String> labels =
+        widget.paper == 'A' ? _cycleLabelsA : _cycleLabelsB;
+    final String next = labels[_cycleIdx % labels.length];
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: FilledButton.icon(
-        icon: const Icon(Icons.flash_on),
-        label: const Text('一键全选 独立完成'),
-        onPressed: _saving ? null : () => _fillAndSave('INDEP'),
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton.icon(
+          icon: const Icon(Icons.flash_on),
+          label: Text('一键全选 $next'),
+          onPressed: _saving || _visibleItems.isEmpty ? null : _cycleFill,
+        ),
       ),
     );
   }
@@ -608,7 +458,18 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
                   width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             )
           else
-            IconButton(icon: const Icon(Icons.save), onPressed: _save),
+            // Issue 1：保存图标改为文字「提交」按钮，更符合引导式流程语境。
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: TextButton(
+                onPressed: _save,
+                style: TextButton.styleFrom(
+                  textStyle: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                child: const Text('提交'),
+              ),
+            ),
         ],
       ),
       body: ListView(
@@ -737,13 +598,13 @@ class _OfflineResultScreenState extends ConsumerState<OfflineResultScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('已保存，报告已生成/更新')));
-        context.pop();
+        // Issue 2：保存即回到儿童详情页（避免在结果页反复停留）。
+        context.go('/children/${widget.archiveId}');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('保存失败：$e')));
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('保存失败：$e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -759,6 +620,12 @@ class _OfflineResultScreenState extends ConsumerState<OfflineResultScreen> {
     }
     return Scaffold(
       appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: '返回儿童详情',
+          // Issue 2：结果页退出直接回到儿童详情，不再回退到线下模板首页。
+          onPressed: () => context.go('/children/${widget.archiveId}'),
+        ),
         title: const Text('A/B 卷评估结果'),
         actions: <Widget>[
           if (_saving)
@@ -825,12 +692,306 @@ class _OfflineResultScreenState extends ConsumerState<OfflineResultScreen> {
             );
           }),
           const SizedBox(height: 12),
+          // Issue 2：结果页加「导出报告」入口，引导式流程的最后一环。
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push(
+                      '/rehab/${widget.archiveId}/offline-eval-guidance?type=TEACHER&title=${Uri.encodeQueryComponent('教师版评估报告')}'),
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: const Text('教师版报告'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => context.push(
+                      '/rehab/${widget.archiveId}/offline-eval-guidance?type=PARENT&title=${Uri.encodeQueryComponent('家长版评估报告')}'),
+                  icon: const Icon(Icons.family_restroom_outlined),
+                  label: const Text('家长版报告'),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 }
 
+
+/// 提交后的「评估结果」页（引导式流程终点，issue 2）。
+///
+/// 入口：B 卷点右上角「提交」→ 自动归档为新一轮 → pushReplacement 到本页。
+/// 页面只做三件事：看得分、挑小项后查看/导出报告、完成返回。
+///
+/// 返回键与底部「完成」按钮都直接回到儿童详情页 `/children/{id}`，
+/// 不会退回 A/B 卷答题页（避免重复提交产生多余轮次）。
+/// 本次评估已归档，回到线下模板首页即可在「历史评估记录」中看到。
+class OfflineSubmitResultScreen extends ConsumerStatefulWidget {
+  const OfflineSubmitResultScreen({
+    required this.archiveId,
+    this.roundId,
+    super.key,
+  });
+  final String archiveId;
+
+  /// 本次提交自动归档出的轮次 id；为 null 表示归档失败（不显示小项挑选入口）。
+  final String? roundId;
+
+  @override
+  ConsumerState<OfflineSubmitResultScreen> createState() =>
+      _OfflineSubmitResultScreenState();
+}
+
+class _OfflineSubmitResultScreenState
+    extends ConsumerState<OfflineSubmitResultScreen> {
+  Map<String, dynamic>? _aOverview;
+  Map<String, dynamic>? _bResult;
+  bool _loading = true;
+  String? _error;
+
+  /// 7 个领域类型固定顺序，与 OA 网页剖面图一致。
+  static const List<String> _domains = <String>[
+    '模仿',
+    '知觉',
+    '精细动作',
+    '粗大动作',
+    '手眼协调',
+    '认知表现',
+    '口语认知',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final RehabRepository repo = ref.read(rehabRepositoryProvider);
+      _aOverview = await repo.getOfflineAOverview(widget.archiveId);
+      _bResult = await repo.getOfflineBResult(widget.archiveId);
+      _error = null;
+    } catch (e) {
+      _error = '出分失败：$e';
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  /// 退出本页 = 回到儿童详情页（不再退回答题页）。
+  void _backToChild() => context.go('/children/${widget.archiveId}');
+
+  String _str(dynamic v, [String fallback = '-']) =>
+      (v == null || v.toString().isEmpty) ? fallback : v.toString();
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return PopScope<Object?>(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (!didPop) _backToChild();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('评估结果'),
+          leading: BackButton(onPressed: _backToChild),
+        ),
+        body: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                children: <Widget>[
+                  if (_error != null) _errorCard(colors) else ...<Widget>[
+                    _aScoreCard(colors),
+                    const SizedBox(height: 12),
+                    _bScoreCard(colors),
+                  ],
+                  const SizedBox(height: 20),
+                  _section('报告'),
+                  if (widget.roundId != null)
+                    _action(
+                      context,
+                      Icons.checklist,
+                      '挑选康复目标 / 指导说明',
+                      '勾选要纳入报告的小项，再导出教师版 / 家长版报告',
+                      () => context.push(
+                          '/rehab/${widget.archiveId}/offline-guidance/${widget.roundId}'),
+                    ),
+                  _action(
+                    context,
+                    Icons.school_outlined,
+                    '教师版评估报告',
+                    '按所选小项查看并导出 PDF',
+                    () => context.push(
+                      '/rehab/${widget.archiveId}/offline-eval-guidance'
+                      '?type=TEACHER&title=${Uri.encodeQueryComponent('教师版评估报告')}',
+                    ),
+                  ),
+                  _action(
+                    context,
+                    Icons.family_restroom_outlined,
+                    '家长版评估报告',
+                    '按所选小项查看并导出 PDF',
+                    () => context.push(
+                      '/rehab/${widget.archiveId}/offline-eval-guidance'
+                      '?type=PARENT&title=${Uri.encodeQueryComponent('家长版评估报告')}',
+                    ),
+                  ),
+                  _action(
+                    context,
+                    Icons.insights_outlined,
+                    '发展总览报告',
+                    'A 卷得分总览 + 发展功能剖面图，可导出 PDF',
+                    () => context.push(
+                      '/rehab/${widget.archiveId}/offline-overview'
+                      '${widget.roundId == null ? '' : '?roundId=${widget.roundId}'}',
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      icon: const Icon(Icons.check),
+                      label: const Text('完成，返回儿童页'),
+                      onPressed: _backToChild,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _errorCard(ColorScheme colors) => Card(
+        color: colors.errorContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(_error!, style: TextStyle(color: colors.onErrorContainer)),
+        ),
+      );
+
+  Widget _aScoreCard(ColorScheme colors) {
+    final List<dynamic> types = _aOverview?['types'] is List
+        ? List<dynamic>.from(_aOverview!['types'] as List)
+        : <dynamic>[];
+    final Map<String, Map<String, dynamic>> byType =
+        <String, Map<String, dynamic>>{};
+    for (final dynamic t in types) {
+      if (t is Map && t['itemType'] != null) {
+        byType[t['itemType'].toString()] = Map<String, dynamic>.from(t);
+      }
+    }
+    final String total = _str(_aOverview?['totalScore']);
+    final String full = _str(_aOverview?['totalFullScore']);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.assignment_turned_in_outlined),
+                const SizedBox(width: 8),
+                const Text('A 卷得分',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                const Spacer(),
+                Text('总分 $total / $full',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, color: colors.primary)),
+              ],
+            ),
+            const Divider(height: 20),
+            ..._domains.map((String d) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(child: Text(d)),
+                      Text(
+                        '${_str(byType[d]?['score'], '0')} / ${_str(byType[d]?['fullScore'], '0')}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _bScoreCard(ColorScheme colors) {
+    final String passed = _str(_bResult?['maxPassedGroup'], '未通过任何年龄段');
+    final String bucket = _str(_bResult?['bucket'], '');
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Row(
+              children: <Widget>[
+                Icon(Icons.accessible_forward_outlined),
+                SizedBox(width: 8),
+                Text('B 卷结果',
+                    style:
+                        TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+              ],
+            ),
+            const Divider(height: 20),
+            Row(
+              children: <Widget>[
+                const Text('最大通过年龄段'),
+                const Spacer(),
+                Text(passed, style: const TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            if (bucket.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 6),
+              Row(
+                children: <Widget>[
+                  const Text('适应行为分档'),
+                  const Spacer(),
+                  Text(bucket, style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _section(String t) => Padding(
+        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+        child: Text(
+          t,
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      );
+
+  Widget _action(BuildContext context, IconData icon, String title,
+      String subtitle, VoidCallback onTap) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        title: Text(title),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onTap,
+      ),
+    );
+  }
+}
 
 /// 9 行评估报告查看页（教师版 / 家长版）。
 ///
