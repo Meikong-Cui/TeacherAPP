@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -357,7 +359,7 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
             ? node.item.options.map((o) => o.code).toList()
             : const <String>['P', 'F'];
         if (choices.isEmpty) continue;
-        final int idx = choices.indexOf(_draft[key]);
+        final int idx = choices.indexOf(_draft[key] ?? '');
         _draft[key] = choices[(idx + 1) % choices.length];
       }
     });

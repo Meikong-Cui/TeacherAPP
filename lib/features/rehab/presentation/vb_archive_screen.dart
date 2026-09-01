@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_app/data/models/autism_eval_item.dart';
+import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/autism_line_chart.dart';
 import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
+import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 /// VB（Vanderbilt）首页：家长卷 / 教师卷 两套。
 /// 顶部「新建评估 / 查看历史评估」分段：新建用于作答，历史列出所有轮次并可回看得分与报告。
