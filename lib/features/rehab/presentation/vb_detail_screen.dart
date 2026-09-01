@@ -158,7 +158,7 @@ class _VbDetailScreenState extends ConsumerState<VbDetailScreen> {
                       style: TextStyle(color: Colors.grey)),
                 )
               else
-                _ScoreTable(sections: sections),
+                VbScoreTable(sections: sections),
               if (explanation.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 12),
                 Card(
@@ -195,8 +195,8 @@ class _VbDetailScreenState extends ConsumerState<VbDetailScreen> {
   }
 }
 
-class _ScoreTable extends StatelessWidget {
-  const _ScoreTable({required this.sections});
+class VbScoreTable extends StatelessWidget {
+  const VbScoreTable({required this.sections, super.key});
   final List<dynamic> sections;
 
   @override

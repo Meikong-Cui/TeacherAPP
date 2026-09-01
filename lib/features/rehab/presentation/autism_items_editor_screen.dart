@@ -1,9 +1,6 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:printing/printing.dart';
 import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/data/autism_questions.dart';
 import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
@@ -40,6 +37,9 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
   final Map<String, String?> _draft = <String, String?>{};
   bool _saving = false;
   bool _creating = false;
+  /// VB 一键答题循环下标：每点一次所有题切到自己那一档的「下一个选项」
+  /// （按 options_json 顺序；越界时落到末项）。下一次点击前 +1。
+  int _cycleIdx = 0;
 
   @override
   void initState() {
@@ -192,94 +192,27 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
         .read(evalRoundItemsProvider(_roundId!).notifier)
         .save(batch);
 
-    // VB 表单：保存后自动计分并展示各维度得分 + 儿童情况说明。
+    // VB 表单：保存后自动计分（接口幂等：再次调用会重写 score_summary），
+    // 并将流程推向「VB 评估结果」页（与线下模板的引导式流程统一）。
+    // 该结果页自带 PopScope 回儿童详情，不再弹 dialog。
     if (ok && _formCode.startsWith('VB') && _roundId != null && _roundId!.isNotEmpty) {
       try {
-        final Map<String, dynamic> score =
-            await ref.read(rehabRepositoryProvider).vbScore(_roundId!);
-        if (!mounted) return;
-        final List<dynamic> sections =
-            score['sections'] is List ? score['sections'] as List : const <dynamic>[];
-        final String explanation = score['explanation']?.toString() ?? '';
-        await showDialog(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('VB 计分结果'),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  ...sections.whereType<Map<String, dynamic>>().map((s) {
-                    final bool positive = s['positive'] == 1;
-                    final String st = s['scoreType']?.toString() ?? '';
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(
-                        '${s['section']}：${s['sumScore']} 分'
-                        '${st == 'SYMPTOM' ? (positive ? '（筛查阳性）' : '（未达阳性）') : ''}',
-                        style: TextStyle(
-                          color: positive ? Colors.red : null,
-                          fontWeight:
-                              positive ? FontWeight.w700 : FontWeight.normal,
-                        ),
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 8),
-                  Text(explanation, style: const TextStyle(fontSize: 13)),
-                ],
-              ),
-            ),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text('知道了'),
-              ),
-              TextButton.icon(
-                icon: const Icon(Icons.picture_as_pdf),
-                label: const Text('导出报告'),
-                onPressed: () async {
-                  Navigator.of(ctx).pop();
-                  try {
-                    final Uint8List bytes = await ref
-                        .read(rehabRepositoryProvider)
-                        .getVbReportPdf(_roundId!);
-                    await Printing.sharePdf(
-                      bytes: bytes,
-                      filename:
-                          'VB报告_${_formShortLabel()}_第${score['evalSeq'] ?? ''}次.pdf',
-                    );
-                  } catch (e) {
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('导出失败：$e')),
-                      );
-                    }
-                  }
-                },
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.push(
-                    '/rehab-autism/${widget.archiveId}/vb-detail'
-                    '?form=$_formCode'
-                    '&label=${Uri.encodeQueryComponent(_formShortLabel())}'
-                    '&round=$_roundId',
-                  );
-                },
-                child: const Text('查看完整详情'),
-              ),
-            ],
-          ),
-        );
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('VB 计分失败：$e')));
-        }
+        await ref.read(rehabRepositoryProvider).vbScore(_roundId!);
+      } catch (_) {
+        // 计分失败不阻断进入结果页：结果页再试一次。
       }
+      if (!mounted) return;
+      ref.invalidate(evalRoundsProvider('${widget.archiveId}|$_formCode'));
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已提交，正在出分…')));
+      setState(() => _saving = false);
+      context.pushReplacement(
+        '/rehab-autism/${widget.archiveId}/vb-submit'
+        '?round=$_roundId'
+        '&form=$_formCode'
+        '&label=${Uri.encodeQueryComponent(_formShortLabel())}',
+      );
+      return;
     }
 
     if (mounted) {
@@ -344,25 +277,71 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
     return out;
   }
 
-  /// 一键选择：每点一次把所有题切到各自选项的下一个（按选项列表循环）。
-  void _cycleAll() {
+  /// VB 一键选择（仿「线下模板」单按钮循环）：
+  /// 每点一次把所有题切到自己那一档的「下一个选项」（按 options_json 顺序）；
+  /// 越界时落到末项，并不回 0，避免多次点击后「选项错乱」。
+  /// 不触发保存/出分（出分由右上角「提交」按钮触发）。
+  void _cycleFill() {
     final List<AutismEvalFormItem>? items =
         ref.read(evalFormItemsProvider(_formCode)).value;
     if (items == null) return;
-    final List<_Node> tree =
-        _formCode.startsWith('VB') ? _vbTree(items) : _buildTree(items);
+    final List<_Node> tree = _vbTree(items);
     final List<_Node> leaves = _leaves(tree);
+    String? filledLabel;
     setState(() {
       for (final _Node node in leaves) {
         final String key = '${node.item.areaKey ?? 'other'}|${node.item.itemCode}';
-        final List<String> choices = node.item.options.isNotEmpty
-            ? node.item.options.map((o) => o.code).toList()
-            : const <String>['P', 'F'];
+        final List<(String, String)> choices = _choicesForItem(node.item);
         if (choices.isEmpty) continue;
-        final int idx = choices.indexOf(_draft[key] ?? '');
-        _draft[key] = choices[(idx + 1) % choices.length];
+        final int pos = _cycleIdx < choices.length
+            ? _cycleIdx
+            : choices.length - 1;
+        _draft[key] = choices[pos].$1;
+        filledLabel ??= choices[pos].$2;
       }
+      _cycleIdx++;
     });
+    if (filledLabel != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('已一键全选「$filledLabel」，确认后点右上角「提交」出分'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  /// VB 一键答题按钮（单按钮循环，issue 1）。按钮 label 显示下一档要切到的选项 label。
+  Widget _buildVbQuickFill(
+      AsyncValue<List<AutismEvalFormItem>>? formItemsAsync) {
+    return formItemsAsync?.when(
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (items) {
+            final List<_Node> leaves = _leaves(_vbTree(items));
+            if (leaves.isEmpty) return const SizedBox.shrink();
+            // 按钮 label 取首题下一档的 label；档位越界时显示末项。
+            final List<(String, String)> firstChoices =
+                _choicesForItem(leaves.first.item);
+            if (firstChoices.isEmpty) return const SizedBox.shrink();
+            final int pos = _cycleIdx < firstChoices.length
+                ? _cycleIdx
+                : firstChoices.length - 1;
+            final String nextLabel = firstChoices[pos].$2;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.flash_on),
+                  label: Text('一键全选「$nextLabel」'),
+                  onPressed: _saving ? null : _cycleFill,
+                ),
+              ),
+            );
+          },
+        ) ??
+        const SizedBox.shrink();
   }
 
   String _formShortLabel() {
@@ -419,12 +398,13 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
         _roundId != null ? ref.watch(evalRoundItemsProvider(_roundId!)) : null;
 
     final bool busy = _saving || _creating || (roundState?.loading ?? false);
+    final bool isVb = _formCode.startsWith('VB');
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_formLabel()),
         actions: <Widget>[
-          if (_formCode.startsWith('VB'))
+          if (isVb)
             IconButton(
               icon: const Icon(Icons.show_chart),
               tooltip: '查看评估趋势',
@@ -439,10 +419,18 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
                   width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
             )
           else
-            IconButton(
-              icon: const Icon(Icons.save),
-              tooltip: '保存当前评估',
-              onPressed: _save,
+            // 仿「线下模板」答题页：保存图标改为右上角文字「提交」按钮，
+            // 更贴合引导式流程（点击后即出分或给出错误）。
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: TextButton(
+                onPressed: _roundId == null || _roundId!.isEmpty ? null : _save,
+                style: TextButton.styleFrom(
+                  textStyle: const TextStyle(
+                      fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                child: const Text('提交'),
+              ),
             ),
         ],
       ),
@@ -459,18 +447,8 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
               onCreate: _createRound,
               onSelect: _loadRound,
             ),
-            if (_formCode.startsWith('VB'))
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    icon: const Icon(Icons.flash_on),
-                    label: const Text('一键选择（每点一次所有题切到下一选项）'),
-                    onPressed: _cycleAll,
-                  ),
-                ),
-              ),
+            if (isVb && _roundId != null && _roundId!.isNotEmpty)
+              _buildVbQuickFill(formItemsAsync),
             const SizedBox(height: 12),
             if (_roundId == null || _roundId!.isEmpty)
               const Center(

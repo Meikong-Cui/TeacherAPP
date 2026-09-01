@@ -320,6 +320,18 @@ final GoRouter appRouter = GoRouter(
           VbArchiveHome(archiveId: state.pathParameters['id'] ?? ''),
     ),
     GoRoute(
+      // VB 引导式流程终点：答题页提交 → 自动计分 → pushReplacement 到本页。
+      // 退出时回到儿童详情页 /children/:id（见 VbSubmitResultScreen）。
+      path: '/rehab-autism/:id/vb-submit',
+      builder: (BuildContext context, GoRouterState state) =>
+          VbSubmitResultScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        roundId: state.uri.queryParameters['round'] ?? '',
+        formCode: state.uri.queryParameters['form'] ?? 'VB_PARENT',
+        formLabel: state.uri.queryParameters['label'] ?? '家长卷',
+      ),
+    ),
+    GoRoute(
       path: '/rehab-autism/:id/scale-picker',
       builder: (BuildContext context, GoRouterState state) =>
           ScalePickerScreen(

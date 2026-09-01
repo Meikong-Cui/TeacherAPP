@@ -36,7 +36,11 @@ class AutismEvalItem {
   final int? parentItemId; // 树形父题项
   final String? itemScope;
   final String? refAge;
-  final String? rating; // P/E/F/X、A/M/S、0-3 分数、或 P/A；后端字段名 value
+  // 评分代码（P/E/F/X、A/M/S、0-3 分数、或 P/A）。
+  // 与后端 AutismEvalItem.rating 对齐：JSON 字段名必须是 `rating`。
+  // 历史曾误写为 `value`，导致保存时 rating 被 Jackson 丢弃 → VB/STANDARD
+  // 计分时 parseScore(rating) 永远为 null → 「暂无得分」。
+  final String? rating; // P/E/F/X、A/M/S、0-3 分数、或 P/A
   final String? optionLabel; // 所选选项展示文本
   final int? ageMinMonths;
   final int? ageMaxMonths;
@@ -60,7 +64,7 @@ class AutismEvalItem {
             int.tryParse(j['parentItemId']?.toString() ?? ''),
         itemScope: j['itemScope']?.toString(),
         refAge: j['refAge']?.toString(),
-        rating: j['value']?.toString(),
+        rating: j['rating']?.toString(),
         optionLabel: j['optionLabel']?.toString(),
         ageMinMonths: (j['ageMinMonths'] as int?) ??
             int.tryParse(j['ageMinMonths']?.toString() ?? ''),
@@ -82,7 +86,7 @@ class AutismEvalItem {
         if (parentItemId != null) 'parentItemId': parentItemId,
         if (itemScope != null) 'itemScope': itemScope,
         if (refAge != null) 'refAge': refAge,
-        if (rating != null) 'value': rating,
+        if (rating != null) 'rating': rating,
         if (optionLabel != null) 'optionLabel': optionLabel,
         if (ageMinMonths != null) 'ageMinMonths': ageMinMonths,
         if (ageMaxMonths != null) 'ageMaxMonths': ageMaxMonths,
