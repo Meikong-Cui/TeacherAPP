@@ -27,6 +27,7 @@ import 'package:teacher_app/features/rehab/presentation/offline_guidance_select_
 import 'package:teacher_app/features/rehab/presentation/offline_eval_guidance_select_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_round_report_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_overview_report_screen.dart';
+import 'package:teacher_app/features/rehab/presentation/pep3_archive_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/vb_archive_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/vb_detail_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/scale_picker_screen.dart';
@@ -312,6 +313,51 @@ final GoRouter appRouter = GoRouter(
           OfflineGuidanceSelectScreen(
         archiveId: state.pathParameters['id'] ?? '',
         roundId: state.pathParameters['roundId'] ?? '',
+      ),
+    ),
+    // PEP-3：复刻线下模板报告但去掉答题，教师直接填各领域预估年龄。
+    GoRoute(
+      path: '/rehab-autism/:id/pep3-home',
+      builder: (BuildContext context, GoRouterState state) =>
+          Pep3ArchiveHome(archiveId: state.pathParameters['id'] ?? ''),
+    ),
+    // PEP-3 填写月龄页；round 非空表示编辑既有轮次。
+    GoRoute(
+      path: '/rehab-autism/:id/pep3-new',
+      builder: (BuildContext context, GoRouterState state) =>
+          Pep3AgeInputScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        roundId: state.uri.queryParameters['round'],
+      ),
+    ),
+    // PEP-3 提交后的结果页（年龄→档位解析 + 报告入口）。
+    GoRoute(
+      path: '/rehab/:id/pep3-submit',
+      builder: (BuildContext context, GoRouterState state) =>
+          Pep3SubmitResultScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        roundId: state.uri.queryParameters['round'] ?? '',
+      ),
+    ),
+    // PEP-3 单个轮次报告（复用线下模板报告页，template 区分数据来源）
+    GoRoute(
+      path: '/rehab/:id/pep3-round/:roundId',
+      builder: (BuildContext context, GoRouterState state) =>
+          OfflineRoundReportScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        roundId: state.pathParameters['roundId'] ?? '',
+        role: state.uri.queryParameters['role'] ?? 'TEACHER',
+        template: 'PEP3',
+      ),
+    ),
+    // PEP-3 归档后挑选「康复目标 / 指导说明」纳入报告（复用线下模板挑选页）
+    GoRoute(
+      path: '/rehab/:id/pep3-guidance/:roundId',
+      builder: (BuildContext context, GoRouterState state) =>
+          OfflineGuidanceSelectScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        roundId: state.pathParameters['roundId'] ?? '',
+        template: 'PEP3',
       ),
     ),
     GoRoute(

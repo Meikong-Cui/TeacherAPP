@@ -1,22 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_subitem_parser.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
-/// 线下模板报告「康复目标 / 指导说明」小项挑选页（归档轮次）。
+/// 评估报告「康复目标 / 指导说明」小项挑选页（归档轮次）。
 ///
-/// 流程位置：在 OfflineArchiveHome 点「保存为新一轮评估」归档成功后进入。
+/// 流程位置：在 OfflineArchiveHome 点「保存为新一轮评估」归档成功后进入；
+/// PEP-3 则在提交月龄归档后进入（[template] = 'PEP3'）。
 /// 9 行项目本身全部保留（不可取消），老师逐项勾选康复目标 / 指导说明中
 /// 带数字编号的小项，确认后保存选择并跳转轮次报告（后端按所选小项过滤）。
 class OfflineGuidanceSelectScreen extends ConsumerStatefulWidget {
   const OfflineGuidanceSelectScreen({
     required this.archiveId,
     required this.roundId,
+    this.template = 'OFFLINE',
     super.key,
   });
   final String archiveId;
   final String roundId;
+  /// 'OFFLINE'（线下模板 / C-PEP3）或 'PEP3'（PEP-3 年龄预估模板）。
+  final String template;
 
   @override
   ConsumerState<OfflineGuidanceSelectScreen> createState() =>
@@ -38,11 +43,14 @@ class _OfflineGuidanceSelectScreenState
     _load();
   }
 
+  bool get _isPep3 => widget.template == 'PEP3';
+
   Future<void> _load() async {
     try {
-      final Map<String, dynamic>? round = await ref
-          .read(rehabRepositoryProvider)
-          .getOfflineRound(widget.roundId);
+      final RehabRepository repo = ref.read(rehabRepositoryProvider);
+      final Map<String, dynamic>? round = _isPep3
+          ? await repo.getPep3Round(widget.roundId)
+          : await repo.getOfflineRound(widget.roundId);
       final Map<String, dynamic>? report =
           round == null ? null : round['evalReportT'] as Map<String, dynamic>?;
       final List<dynamic> rawRows = report == null
@@ -85,7 +93,9 @@ class _OfflineGuidanceSelectScreenState
       _rows = list;
       _selected = sel;
       if (list.isEmpty) {
-        _error = '该轮次尚未生成报告，请先完成 A/B 卷答题。';
+        _error = _isPep3
+            ? '该轮次尚未生成报告，请先填写各领域预估年龄。'
+            : '该轮次尚未生成报告，请先完成 A/B 卷答题。';
       }
     } catch (e) {
       _error = '加载失败：$e';
@@ -125,16 +135,20 @@ class _OfflineGuidanceSelectScreenState
     if (_saving) return;
     setState(() => _saving = true);
     try {
-      await ref.read(rehabRepositoryProvider).saveOfflineRoundGuidance(
-            widget.roundId,
-            _buildPayload(),
-          );
+      final RehabRepository repo = ref.read(rehabRepositoryProvider);
+      if (_isPep3) {
+        await repo.savePep3RoundGuidance(widget.roundId, _buildPayload());
+      } else {
+        await repo.saveOfflineRoundGuidance(widget.roundId, _buildPayload());
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('已保存挑选，正在打开报告…')));
       // 跳转轮次报告页（后端已按所选小项过滤）。
       context.pushReplacement(
-          '/rehab/${widget.archiveId}/offline-round/${widget.roundId}?role=TEACHER');
+        '/rehab/${widget.archiveId}/'
+        '${_isPep3 ? 'pep3-round' : 'offline-round'}/${widget.roundId}?role=TEACHER',
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)

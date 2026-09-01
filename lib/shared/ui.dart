@@ -158,6 +158,8 @@ Color iconColor(String key) {
       return const Color(0xFFC99A00);
     case 'purple':
       return const Color(0xFF7C5CF0);
+    case 'indigo':
+      return const Color(0xFF4F6BED);
     default:
       return const Color(0xFF5B6F6C);
   }

@@ -2,20 +2,26 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:printing/printing.dart';
+import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
-/// 单个线下模板评估轮次的报告查看页（不可变快照）。
-/// 支持教师版/家长版切换，导出该轮次 PDF。
+/// 单个评估轮次的报告查看页（不可变快照），支持教师版/家长版切换与 PDF 导出。
+///
+/// PEP-3 与线下模板（OFFLINE）共用同一套 9 行报告结构，因此本页用 [template]
+/// 区分数据来源：'OFFLINE'（默认）读线下模板轮次，'PEP3' 读 PEP-3 轮次。
 class OfflineRoundReportScreen extends ConsumerStatefulWidget {
   const OfflineRoundReportScreen({
     required this.archiveId,
     required this.roundId,
     required this.role,
+    this.template = 'OFFLINE',
     super.key,
   });
   final String archiveId;
   final String roundId;
   final String role;
+  /// 'OFFLINE'（线下模板 / C-PEP3）或 'PEP3'（PEP-3 年龄预估模板）。
+  final String template;
 
   @override
   ConsumerState<OfflineRoundReportScreen> createState() =>
@@ -37,11 +43,15 @@ class _OfflineRoundReportScreenState
     _load();
   }
 
+  bool get _isPep3 => widget.template == 'PEP3';
+
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      _round =
-          await ref.read(rehabRepositoryProvider).getOfflineRound(widget.roundId);
+      final RehabRepository repo = ref.read(rehabRepositoryProvider);
+      _round = _isPep3
+          ? await repo.getPep3Round(widget.roundId)
+          : await repo.getOfflineRound(widget.roundId);
       _error = null;
     } catch (e) {
       _error = '加载失败：$e';
@@ -60,11 +70,14 @@ class _OfflineRoundReportScreenState
   Future<void> _exportPdf() async {
     setState(() => _exporting = true);
     try {
-      final Uint8List bytes = await ref
-          .read(rehabRepositoryProvider)
-          .getOfflineRoundReportPdf(widget.roundId, _role);
+      final RehabRepository repo = ref.read(rehabRepositoryProvider);
+      final Uint8List bytes = _isPep3
+          ? await repo.getPep3RoundReportPdf(widget.roundId, _role)
+          : await repo.getOfflineRoundReportPdf(widget.roundId, _role);
+      final String tag = _isPep3 ? 'PEP3' : '';
       final String name =
-          '${_role == 'TEACHER' ? '教师版' : '家长版'}评估报告_第${widget.roundId}次.pdf';
+          '${_role == 'TEACHER' ? '教师版' : '家长版'}评估报告$tag'
+          '_第${_round?['evalSeq'] ?? widget.roundId}次.pdf';
       await Printing.sharePdf(bytes: bytes, filename: name);
     } catch (e) {
       if (!mounted) return;

@@ -583,6 +583,111 @@ class RehabRepository {
     );
   }
 
+  // ========== PEP-3 模板（跳过答题，直接填各领域预估年龄）==========
+
+  /// PEP-3 的 9 个项目及其可选年龄档（月）。
+  /// 后端 GET /autism/pep3/age-bands
+  Future<Map<String, dynamic>> getPep3AgeBands() async {
+    final dynamic data = await apiClient.get('$_autismPath/pep3/age-bands');
+    if (data is! Map<String, dynamic>) return const <String, dynamic>{};
+    return data;
+  }
+
+  /// 预览：按当前月龄算报告，不落库。role 为 TEACHER / PARENT。
+  /// 后端 POST /autism/pep3/preview
+  Future<Map<String, dynamic>> previewPep3Report(
+    Map<String, int> ages, {
+    String role = 'TEACHER',
+    String? archiveId,
+  }) async {
+    final dynamic data = await apiClient.post(
+      '$_autismPath/pep3/preview',
+      <String, dynamic>{
+        'ages': ages,
+        'role': role,
+        if (archiveId != null) 'archiveId': archiveId,
+      },
+    );
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('PEP-3 预览响应异常');
+    }
+    return data;
+  }
+
+  /// 新建一轮 PEP-3 评估，返回轮次 id。
+  /// 后端 POST /autism/pep3/rounds
+  Future<int> createPep3Round(
+    String archiveId,
+    Map<String, int> ages, {
+    String? evaluatorName,
+  }) async {
+    final dynamic data = await apiClient.post(
+      '$_autismPath/pep3/rounds',
+      <String, dynamic>{
+        'archiveId': archiveId,
+        'ages': ages,
+        if (evaluatorName != null) 'evaluatorName': evaluatorName,
+      },
+    );
+    if (data is int) return data;
+    return int.tryParse(data?.toString() ?? '0') ?? 0;
+  }
+
+  /// 列出某档案的全部 PEP-3 评估轮次（倒序）。
+  /// 后端 GET /autism/pep3/rounds?archiveId=
+  Future<List<Map<String, dynamic>>> listPep3Rounds(String archiveId) async {
+    final dynamic data = await apiClient
+        .get('$_autismPath/pep3/rounds?archiveId=${Uri.encodeQueryComponent(archiveId)}');
+    if (data is! List) return const <Map<String, dynamic>>[];
+    return data.whereType<Map<String, dynamic>>().toList();
+  }
+
+  /// 单个 PEP-3 轮次详情（月龄 + 档位解析 + 教师/家长版报告）。
+  /// 后端 GET /autism/pep3/rounds/{id}
+  Future<Map<String, dynamic>?> getPep3Round(String roundId) async {
+    final dynamic data = await apiClient
+        .get('$_autismPath/pep3/rounds/${Uri.encodeQueryComponent(roundId)}');
+    if (data is! Map<String, dynamic>) return null;
+    return data;
+  }
+
+  /// 编辑某轮 PEP-3 评估：重填月龄并重出报告，返回最新详情。
+  /// 后端 PUT /autism/pep3/rounds/{id}
+  Future<Map<String, dynamic>?> updatePep3Round(
+    String roundId,
+    Map<String, int> ages, {
+    String? evaluatorName,
+  }) async {
+    final dynamic data = await apiClient.put(
+      '$_autismPath/pep3/rounds/${Uri.encodeQueryComponent(roundId)}',
+      <String, dynamic>{
+        'ages': ages,
+        if (evaluatorName != null) 'evaluatorName': evaluatorName,
+      },
+    );
+    if (data is! Map<String, dynamic>) return null;
+    return data;
+  }
+
+  /// 保存某轮 PEP-3 报告「康复目标 / 指导说明」的小项勾选结果。
+  /// 后端 POST /autism/pep3/rounds/{id}/guidance
+  Future<void> savePep3RoundGuidance(
+      String roundId, Map<String, Map<String, List<int>>> items) async {
+    await apiClient.post(
+      '$_autismPath/pep3/rounds/${Uri.encodeQueryComponent(roundId)}/guidance',
+      <String, dynamic>{'items': items},
+    );
+  }
+
+  /// 单轮 PEP-3 报告 PDF（教师版/家长版），返回字节流。
+  /// 后端 GET /autism/pep3/rounds/{id}/report/pdf?role=
+  Future<Uint8List> getPep3RoundReportPdf(String roundId, String role) async {
+    return apiClient.getBytes(
+      '$_autismPath/pep3/rounds/${Uri.encodeQueryComponent(roundId)}/report/pdf'
+      '?role=${Uri.encodeQueryComponent(role)}',
+    );
+  }
+
   /// VB 计分：对某评估轮次计分并保存各维度得分，返回维度得分与儿童情况说明。
   /// 后端 POST /autism/vb/score?roundId=
   Future<Map<String, dynamic>> vbScore(String roundId) async {

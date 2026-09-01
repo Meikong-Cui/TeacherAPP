@@ -310,6 +310,13 @@ class ChildHubScreen extends ConsumerWidget {
           colorKey: 'rose',
         ),
         const _HubEntry(
+          icon: Icons.child_care_outlined,
+          title: 'PEP-3',
+          subtitle: '填各领域预估年龄 → 直接出报告',
+          route: '/rehab-autism/{id}/pep3-home',
+          colorKey: 'indigo',
+        ),
+        const _HubEntry(
           icon: Icons.record_voice_over_outlined,
           title: 'VB',
           subtitle: 'VB 教师 / 家长卷',
