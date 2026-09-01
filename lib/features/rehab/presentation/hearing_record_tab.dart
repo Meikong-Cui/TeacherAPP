@@ -207,23 +207,11 @@ class _HearingRecordEditFormState extends State<_HearingRecordEditForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_draft.id.isEmpty ? '新建听能管理记录' : '编辑听能管理记录'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: widget.onCancel,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => widget.onSave(_draft),
-            child: const Text('保存', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+    // 直接渲染表单（无内层 Scaffold，避免与外层 HearingSectionScreen 嵌套出双 AppBar）。
+    // 保存/取消按钮置于表单底部，由 onSave/onCancel 回调回传主列表状态。
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
           _section('基本资料'),
           _textField('档案编号', _draft.recordNo, (v) => _draft = _draft.copyWith(recordNo: v)),
           _textField('姓名', _draft.name, (v) => _draft = _draft.copyWith(name: v)),
@@ -291,9 +279,28 @@ class _HearingRecordEditFormState extends State<_HearingRecordEditForm> {
               (v) => _draft = _draft.copyWith(audiologistSignature: v)),
 
           const SizedBox(height: 24),
+
+          // 底部：保存 / 取消按钮（替代原 AppBar 右上角 TextButton）。
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: widget.onCancel,
+                child: const Text('取消'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: FilledButton.icon(
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('保存'),
+                onPressed: () => widget.onSave(_draft),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 24),
         ],
-      ),
-    );
+      );
   }
 
   Widget _section(String t) => Padding(

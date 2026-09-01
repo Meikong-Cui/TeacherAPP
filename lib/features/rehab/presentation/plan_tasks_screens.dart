@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_app/app/design_tokens.dart';
 import 'package:teacher_app/shared/ui.dart';
 import 'package:teacher_app/data/models/rehab.dart';
+import 'package:teacher_app/features/ai_lesson_plan/data/ai_lesson_plan_repository.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 /// 听障档案 - 教学计划独立页。
@@ -77,50 +79,55 @@ class PlanSectionScreen extends ConsumerWidget {
                     final DateFormat fmt = DateFormat('yyyy.MM.dd');
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      // 纯查看卡片：各领域目标已完整展示，不再跳转
-                      // （原先点击会 push 回档案详情页，造成循环嵌套导航）。
-                      child: SoftCard(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Row(children: <Widget>[
-                              Icon(
-                                p.aiGenerated
-                                    ? Icons.auto_awesome_outlined
-                                    : Icons.edit_calendar_outlined,
-                                color: AppPalette.brandDark,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  p.aiGenerated ? 'AI 教学计划' : '教学计划',
-                                  style: const TextStyle(
-                                    fontSize: AppFontSize.title,
-                                    fontWeight: FontWeight.bold,
+                      // 整卡可点击 → 弹出编辑/AI 补全弹窗（避免再嵌套 push 详情页导致循环导航）。
+                      child: InkWell(
+                        onTap: () => _showPlanEditDialog(context, ref, p),
+                        borderRadius: BorderRadius.circular(12),
+                        child: SoftCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(children: <Widget>[
+                                Icon(
+                                  p.aiGenerated
+                                      ? Icons.auto_awesome_outlined
+                                      : Icons.edit_calendar_outlined,
+                                  color: AppPalette.brandDark,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    p.aiGenerated ? 'AI 教学计划' : '教学计划',
+                                    style: const TextStyle(
+                                      fontSize: AppFontSize.title,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
+                                const Icon(Icons.chevron_right,
+                                    color: AppPalette.inkMute),
+                              ]),
+                              const SizedBox(height: 6),
+                              Text(
+                                '${fmt.format(p.planPeriodStart ?? DateTime.now())} ~ ${fmt.format(p.planPeriodEnd ?? DateTime.now())}',
+                                style: const TextStyle(
+                                    fontSize: AppFontSize.small,
+                                    color: AppPalette.inkMute),
                               ),
-                            ]),
-                            const SizedBox(height: 6),
-                            Text(
-                              '${fmt.format(p.planPeriodStart ?? DateTime.now())} ~ ${fmt.format(p.planPeriodEnd ?? DateTime.now())}',
-                              style: const TextStyle(
-                                  fontSize: AppFontSize.small,
-                                  color: AppPalette.inkMute),
-                            ),
-                            if (p.hearingGoal.isNotEmpty)
-                              _goalLine('听觉', p.hearingGoal),
-                            if (p.speechGoal.isNotEmpty)
-                              _goalLine('言语', p.speechGoal),
-                            if (p.languageGoal.isNotEmpty)
-                              _goalLine('语言', p.languageGoal),
-                            if (p.cognitionGoal.isNotEmpty)
-                              _goalLine('认知', p.cognitionGoal),
-                            if (p.communicationGoal.isNotEmpty)
-                              _goalLine('沟通', p.communicationGoal),
-                            if (p.familyGuidance.isNotEmpty)
-                              _goalLine('家庭指导', p.familyGuidance),
-                          ],
+                              if (p.hearingGoal.isNotEmpty)
+                                _goalLine('听觉', p.hearingGoal),
+                              if (p.speechGoal.isNotEmpty)
+                                _goalLine('言语', p.speechGoal),
+                              if (p.languageGoal.isNotEmpty)
+                                _goalLine('语言', p.languageGoal),
+                              if (p.cognitionGoal.isNotEmpty)
+                                _goalLine('认知', p.cognitionGoal),
+                              if (p.communicationGoal.isNotEmpty)
+                                _goalLine('沟通', p.communicationGoal),
+                              if (p.familyGuidance.isNotEmpty)
+                                _goalLine('家庭指导', p.familyGuidance),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -180,6 +187,196 @@ class PlanSectionScreen extends ConsumerWidget {
           ),
         ),
       );
+
+  /// 编辑教学计划（含 AI 补全入口）。
+  /// 弹窗内可改日期、6 大领域目标、家庭指导；非 AI 计划额外提供 "AI 补全"，
+  /// 关闭弹窗后 push 到 /ai-lesson-plan。
+  void _showPlanEditDialog(
+      BuildContext context, WidgetRef ref, RehabTeachingPlan plan) {
+    final TextEditingController hearCtrl =
+        TextEditingController(text: plan.hearingGoal);
+    final TextEditingController speechCtrl =
+        TextEditingController(text: plan.speechGoal);
+    final TextEditingController langCtrl =
+        TextEditingController(text: plan.languageGoal);
+    final TextEditingController cognCtrl =
+        TextEditingController(text: plan.cognitionGoal);
+    final TextEditingController commCtrl =
+        TextEditingController(text: plan.communicationGoal);
+    final TextEditingController familyCtrl =
+        TextEditingController(text: plan.familyGuidance);
+    final TextEditingController otherCtrl =
+        TextEditingController(text: plan.otherGoal);
+    DateTime? start = plan.planPeriodStart;
+    DateTime? end = plan.planPeriodEnd;
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx2, setDlg) => AlertDialog(
+          title: const Text('教学计划详情'),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _planDateRow(context, '开始日期', start,
+                        (v) => setDlg(() => start = v)),
+                    const SizedBox(height: 8),
+                    _planDateRow(context, '结束日期', end,
+                        (v) => setDlg(() => end = v)),
+                    const SizedBox(height: 12),
+                    _planField('听能目标', hearCtrl),
+                    _planField('言语目标', speechCtrl),
+                    _planField('语言目标', langCtrl),
+                    _planField('认知目标', cognCtrl),
+                    _planField('沟通目标', commCtrl),
+                    _planField('家庭指导', familyCtrl),
+                    _planField('其他目标', otherCtrl),
+                  ]),
+            ),
+          ),
+          actions: <Widget>[
+            if (!plan.aiGenerated)
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _openAiLessonPlan(context, ref, plan);
+                },
+                icon: const Icon(Icons.auto_awesome, size: 16),
+                label: const Text('AI 补全'),
+              ),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消')),
+            FilledButton.tonal(
+              onPressed: () async {
+                final RehabTeachingPlan updated = plan.copyWith(
+                  planPeriodStart: start,
+                  planPeriodEnd: end,
+                  hearingGoal: hearCtrl.text.trim(),
+                  speechGoal: speechCtrl.text.trim(),
+                  languageGoal: langCtrl.text.trim(),
+                  cognitionGoal: cognCtrl.text.trim(),
+                  communicationGoal: commCtrl.text.trim(),
+                  familyGuidance: familyCtrl.text.trim(),
+                  otherGoal: otherCtrl.text.trim(),
+                );
+                await ref
+                    .read(rehabArchiveDetailProvider(archiveId).notifier)
+                    .updatePlan(updated);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _planDateRow(BuildContext context, String label, DateTime? value,
+      ValueChanged<DateTime?> onChanged) {
+    return InkWell(
+      onTap: () async {
+        final DateTime? picked = await showDatePicker(
+          context: context,
+          initialDate: value ?? DateTime.now(),
+          firstDate: DateTime(2020),
+          lastDate: DateTime(2040),
+        );
+        if (picked != null) onChanged(picked);
+      },
+      child: Row(children: <Widget>[
+        SizedBox(
+            width: 72,
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 14, color: AppPalette.inkMute))),
+        Expanded(
+            child: Text(
+          value == null ? '请选择' : DateFormat('yyyy-MM-dd').format(value),
+          style: TextStyle(
+              fontSize: 14,
+              color: value == null
+                  ? AppPalette.inkMute
+                  : AppPalette.ink),
+        )),
+        const Icon(Icons.calendar_today, size: 18, color: AppPalette.inkMute),
+      ]),
+    );
+  }
+
+  Widget _planField(String label, TextEditingController ctrl) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: TextField(
+          controller: ctrl,
+          decoration: InputDecoration(
+            labelText: label,
+            border: const OutlineInputBorder(),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          ),
+          minLines: 2,
+          maxLines: 4,
+          style: const TextStyle(fontSize: 14),
+        ),
+      );
+
+  /// 打开 AI 写教案（5 大领域生成器），带入儿童档案信息与目标教学计划。
+  void _openAiLessonPlan(
+      BuildContext context, WidgetRef ref, RehabTeachingPlan plan) {
+    final RehabArchiveDetailState st =
+        ref.read(rehabArchiveDetailProvider(archiveId));
+    final RehabArchiveDetail? detail = st.detail;
+    if (detail == null) return;
+    final RehabFirstEval? fe = detail.firstEval;
+    final RehabContEval? latestCont =
+        detail.contEvals.isNotEmpty ? detail.contEvals.last : null;
+    final String phys = (latestCont != null &&
+            latestCont.physiologicalAge.isNotEmpty)
+        ? latestCont.physiologicalAge
+        : _ageFromBirth(fe?.birthDate);
+    final String hear = (latestCont != null &&
+            latestCont.hearingAge.isNotEmpty)
+        ? latestCont.hearingAge
+        : '';
+    final String device = _deviceWearFrom(fe);
+
+    context.push('/ai-lesson-plan', extra: AiLessonPlanLaunchContext(
+      archiveId: int.tryParse(archiveId),
+      childName: detail.archive.childName,
+      gender: fe?.gender ?? '',
+      physiologicalAge: phys,
+      hearingAge: hear,
+      deviceWear: device,
+      plan: plan,
+    ));
+  }
+
+  String _ageFromBirth(DateTime? birth) {
+    if (birth == null) return '';
+    final DateTime now = DateTime.now();
+    int months = (now.year - birth.year) * 12 +
+        now.month -
+        birth.month -
+        (now.day < birth.day ? 1 : 0);
+    if (months < 0) months = 0;
+    return '${months ~/ 12}岁${months % 12}个月';
+  }
+
+  String _deviceWearFrom(RehabFirstEval? fe) {
+    if (fe == null) return '双侧';
+    final bool left = fe.leftCompensationType.isNotEmpty;
+    final bool right = fe.rightCompensationType.isNotEmpty;
+    if (left && right) return '双侧';
+    if (left || right) return '单侧';
+    return '双侧';
+  }
 }
 
 /// 听障档案 - 评估待办独立页。
