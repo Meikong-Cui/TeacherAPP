@@ -36,17 +36,31 @@ class ChildTimeline extends ConsumerStatefulWidget {
 
 class _ChildTimelineState extends ConsumerState<ChildTimeline> {
   List<Map<String, dynamic>> _offlineRounds = const <Map<String, dynamic>>[];
+  List<Map<String, dynamic>> _pep3Rounds = const <Map<String, dynamic>>[];
 
   @override
   void initState() {
     super.initState();
-    if (widget.isAutism) _loadOfflineRounds();
+    if (widget.isAutism) {
+      _loadOfflineRounds();
+      _loadPep3Rounds();
+    }
   }
 
   Future<void> _loadOfflineRounds() async {
     try {
       _offlineRounds =
           await ref.read(rehabRepositoryProvider).listOfflineRounds(widget.archiveId);
+    } catch (_) {
+      // 忽略异常，时间线其余部分仍可展示。
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _loadPep3Rounds() async {
+    try {
+      _pep3Rounds =
+          await ref.read(rehabRepositoryProvider).listPep3Rounds(widget.archiveId);
     } catch (_) {
       // 忽略异常，时间线其余部分仍可展示。
     }
@@ -173,6 +187,19 @@ class _ChildTimelineState extends ConsumerState<ChildTimeline> {
           subtitle: 'OFFLINE A/B 卷',
           icon: Icons.offline_bolt_outlined,
           tone: AppPalette.rose,
+        ));
+      }
+      // PEP-3 评估轮次（不答 A/B 卷，教师直接填各领域预估月龄）
+      for (final Map<String, dynamic> r in _pep3Rounds) {
+        final String dateStr = r['evalDate']?.toString() ?? '';
+        final DateTime? d = DateTime.tryParse(dateStr);
+        final int seq = r['evalSeq'] is int ? r['evalSeq'] as int : 0;
+        events.add(_TimelineEvent(
+          date: d,
+          title: 'PEP-3（第${seq == 0 ? '?' : seq}次）',
+          subtitle: '填预估月龄 → 出报告',
+          icon: Icons.child_care_outlined,
+          tone: AppPalette.info,
         ));
       }
       // VB 评估轮次（教师卷 / 家长卷合并去重）

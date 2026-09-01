@@ -7,9 +7,13 @@ import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 /// 评估历史独立页（孤独症档案专用）。
-/// 从儿童中枢页「评估历史」卡片进入，展示 VB 教师卷 / VB 家长卷 / 线下模板 OFFLINE 三类记录。
+/// 从儿童中枢页「评估历史」卡片进入，展示 VB 教师卷 / VB 家长卷 / C-PEP3（OFFLINE）/
+/// PEP-3 四类记录。
 /// - VB 行：查看 → 编辑器；趋势 → 多维折线（后端无单轮 PDF，故只接趋势能力）。
-/// - OFFLINE：按「评估轮次」逐次展示（每次归档为一份不可变记录），可查看/导出 PDF。
+/// - OFFLINE（C-PEP3）：按「评估轮次」逐次展示（每次归档为一份不可变记录），
+///   可查看教师版 / 家长版 / 发展总览三份报告并导出 PDF。
+/// - PEP-3：不答 A/B 卷，每次提交预估月龄即归档一份记录，同时生成教师版与
+///   家长版两份报告（无第三份「发展总览」，故也无 hasReportP 开关）。
 class EvalHistoryScreen extends ConsumerWidget {
   const EvalHistoryScreen({required this.archiveId, super.key});
   final String archiveId;
@@ -50,6 +54,8 @@ class _EvalHistoryBody extends StatelessWidget {
             label: 'VB 教师卷'),
         const SizedBox(height: 12),
         _OfflineRoundsBlock(archiveId: archiveId),
+        const SizedBox(height: 12),
+        _Pep3RoundsBlock(archiveId: archiveId),
       ],
     );
   }
@@ -279,6 +285,101 @@ class _OfflineRoundsBlockState extends ConsumerState<_OfflineRoundsBlock> {
                     ),
                     onTap: () => context.push(
                         '/rehab/${widget.archiveId}/offline-answer/$rid?paper=A'),
+                  );
+                }).toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// PEP-3 评估轮次列表。
+/// PEP-3 不答 A/B 卷，每次提交预估月龄即归档一份记录，并**同时**生成
+/// 教师版与家长版两份报告（与 OFFLINE 不同，没有 hasReportP 开关，
+/// 也没有第三份「发展总览」报告）。
+class _Pep3RoundsBlock extends ConsumerStatefulWidget {
+  const _Pep3RoundsBlock({required this.archiveId});
+  final String archiveId;
+
+  @override
+  ConsumerState<_Pep3RoundsBlock> createState() => _Pep3RoundsBlockState();
+}
+
+class _Pep3RoundsBlockState extends ConsumerState<_Pep3RoundsBlock> {
+  List<Map<String, dynamic>> _rounds = const <Map<String, dynamic>>[];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      _rounds = await ref
+          .read(rehabRepositoryProvider)
+          .listPep3Rounds(widget.archiveId);
+    } catch (_) {
+      // 忽略异常，展示空态。
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text('PEP-3（多次记录）',
+                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: LinearProgressIndicator(minHeight: 2),
+              )
+            else if (_rounds.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  '尚无记录，到「PEP-3」页填写各领域预估月龄后生成。',
+                  style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant),
+                ),
+              )
+            else
+              Column(
+                children: _rounds.map((r) {
+                  final String rid = r['id']?.toString() ?? '';
+                  final int seq = r['evalSeq'] is int ? r['evalSeq'] as int : 0;
+                  final String date = r['evalDate']?.toString() ?? '';
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.child_care_outlined),
+                    title: Text('第 $seq 次'),
+                    subtitle: Text(date.length >= 10 ? date.substring(0, 10) : '点击查看'),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        TextButton(
+                          onPressed: () => context.push(
+                              '/rehab/${widget.archiveId}/pep3-round/$rid?role=TEACHER'),
+                          child: const Text('教师版'),
+                        ),
+                        TextButton(
+                          onPressed: () => context.push(
+                              '/rehab/${widget.archiveId}/pep3-round/$rid?role=PARENT'),
+                          child: const Text('家长版'),
+                        ),
+                      ],
+                    ),
                   );
                 }).toList(),
               ),
