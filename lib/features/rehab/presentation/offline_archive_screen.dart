@@ -808,7 +808,7 @@ class _OfflineSubmitResultScreenState
                   if (_error != null) _errorCard(colors) else ...<Widget>[
                     _aScoreCard(colors),
                     const SizedBox(height: 12),
-                    _bScoreCard(colors),
+                    _bScoreCard(),
                   ],
                   const SizedBox(height: 20),
                   _section('报告'),
@@ -925,7 +925,7 @@ class _OfflineSubmitResultScreenState
     );
   }
 
-  Widget _bScoreCard(ColorScheme colors) {
+  Widget _bScoreCard() {
     final String passed = _str(_bResult?['maxPassedGroup'], '未通过任何年龄段');
     final String bucket = _str(_bResult?['bucket'], '');
     return Card(

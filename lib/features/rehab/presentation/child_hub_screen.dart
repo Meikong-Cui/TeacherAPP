@@ -59,6 +59,14 @@ class ChildHubScreen extends ConsumerWidget {
     final List<_PlanItem> plans = _buildPlanItems(isAutism, rehabState.detail!,
         isAutism ? autismState?.detail : null);
 
+    /// 重新拉取档案详情：编辑儿童信息保存后、或手动点刷新时调用。
+    void _reload() {
+      ref.read(rehabArchiveDetailProvider(archiveId).notifier).reload();
+      if (isAutism) {
+        ref.read(autismArchiveDetailProvider(archiveId).notifier).reload();
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -78,17 +86,17 @@ class ChildHubScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: '编辑儿童信息',
-            onPressed: () => context.push('/children/$archiveId/edit'),
+            // 编辑页保存后 pop(true)，回到本页立刻重新拉取，姓名等信息即时更新。
+            onPressed: () async {
+              final Object? saved =
+                  await context.push<Object?>('/children/$archiveId/edit');
+              if (saved == true && context.mounted) _reload();
+            },
           ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: '刷新',
-            onPressed: () {
-              ref.read(rehabArchiveDetailProvider(archiveId).notifier).reload();
-              if (isAutism) {
-                ref.read(autismArchiveDetailProvider(archiveId).notifier).reload();
-              }
-            },
+            onPressed: _reload,
           ),
         ],
       ),
