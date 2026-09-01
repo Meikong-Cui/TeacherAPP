@@ -168,6 +168,7 @@ class _TypeTag extends StatelessWidget {
     'reimbursement': '报销',
     'seal': '用章',
     'mailbox': '信箱',
+    'fund': '经费',
   };
   static const Map<String, Color> _colors = <String, Color>{
     'approval': Colors.orange,
@@ -176,6 +177,9 @@ class _TypeTag extends StatelessWidget {
     'notice': Colors.blue,
     'reimbursement': Colors.amber,
     'seal': Colors.teal,
+    // 后加的两类沿用项目设计令牌，避免 material 调色板与品牌色不一致
+    'mailbox': AppPalette.gold,
+    'fund': AppPalette.brand,
   };
 
   @override
