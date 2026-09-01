@@ -225,7 +225,7 @@ class _OfflineRoundsBlockState extends ConsumerState<_OfflineRoundsBlock> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('线下模板评估（多次记录）',
+            Text('C-PEP3（多次记录）',
                 style: text.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
             if (_loading)
@@ -237,7 +237,7 @@ class _OfflineRoundsBlockState extends ConsumerState<_OfflineRoundsBlock> {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Text(
-                  '尚无归档记录，到「线下模板评估」页点「保存为新一轮评估」生成。',
+                  '尚无归档记录，到「C-PEP3」页点「保存为新一轮评估」生成。',
                   style: text.bodySmall?.copyWith(color: colors.onSurfaceVariant),
                 ),
               )

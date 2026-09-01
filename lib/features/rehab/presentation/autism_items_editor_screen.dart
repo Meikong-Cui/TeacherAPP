@@ -483,7 +483,7 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
   String _formLabel() {
     switch (_formCode) {
       case 'OFFLINE':
-        return '线下模板评估录入';
+        return 'C-PEP3 评估录入';
       case 'VB_PARENT':
         return 'VB 家长卷评估录入';
       case 'VB_TEACHER':

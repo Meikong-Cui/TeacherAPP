@@ -48,7 +48,7 @@ class _OfflineArchiveHomeState extends ConsumerState<OfflineArchiveHome> {
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('线下模板评估')),
+      appBar: AppBar(title: const Text('C-PEP3')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[

@@ -169,7 +169,7 @@ class _ChildTimelineState extends ConsumerState<ChildTimeline> {
         final int seq = r['evalSeq'] is int ? r['evalSeq'] as int : 0;
         events.add(_TimelineEvent(
           date: d,
-          title: '线下模板评估（第${seq == 0 ? '?' : seq}次）',
+          title: 'C-PEP3（第${seq == 0 ? '?' : seq}次）',
           subtitle: 'OFFLINE A/B 卷',
           icon: Icons.offline_bolt_outlined,
           tone: AppPalette.rose,
