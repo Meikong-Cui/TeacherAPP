@@ -116,15 +116,30 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
     final AsyncValue<List<AutismEvalForm>> formsAsync =
         ref.watch(evalFormsProvider);
     final List<_FormOption> formOptions = formsAsync.maybeWhen(
-      data: (List<AutismEvalForm> list) => list.isEmpty
-          ? _builtinForms
-          : list
-              .map((AutismEvalForm f) => _FormOption(
-                    f.formCode,
-                    f.formName.isEmpty ? f.formCode : f.formName,
-                    (f.description ?? '').trim(),
-                  ))
-              .toList(),
+      data: (List<AutismEvalForm> list) {
+        if (list.isEmpty) return _builtinForms;
+        final List<_FormOption> opts = list
+            .map((AutismEvalForm f) {
+              String name = f.formName.isEmpty ? f.formCode : f.formName;
+              String desc = (f.description ?? '').trim();
+              // 纯前端文案约定：避免依赖后端种子，便于独立调整。
+              if (f.formCode == 'OFFLINE') name = 'C-PEP3';
+              if (f.formCode == 'PEP3') name = 'PEP-3';
+              return _FormOption(f.formCode, name, desc);
+            })
+            .toList();
+        // 注入 PEP-3（不答题、只填月龄；与 C-PEP3 报告同构但完全独立模板）。
+        // 后端种子暂未包含该 code（2026-09-01 引入），前端固定追加以便后续
+        // 模板继续按此模式独立接入。后端将来补种后此注入为幂等。
+        if (!opts.any((_FormOption o) => o.code == 'PEP3')) {
+          opts.add(const _FormOption(
+            'PEP3',
+            'PEP-3',
+            '教师为 9 个领域填预估月龄，按年龄反查档位直接出报告（不答题）。',
+          ));
+        }
+        return opts;
+      },
       orElse: () => _builtinForms,
     );
 
@@ -418,14 +433,18 @@ class _FormOption {
   final String desc;
 }
 
-/// 内置三套量表：与后端 autism_eval_form 种子保持一致。
+/// 内置量表兜底（后端 /forms 未就绪时使用）。文案与显示名保持与运行时一致：
+/// OFFLINE 渲染为 C-PEP3、注入 PEP-3。PEP-3 与 C-PEP3 是两套独立模板，
+/// 不要共用 code，未来若新增其他模板请按此模式独立追加。
 const List<_FormOption> _builtinForms = <_FormOption>[
   _FormOption('STANDARD', '残联标准',
       '8 大领域 + 情绪与行为共 493 题；普通领域 P/E/F/X，情绪行为 A/M/S。'),
-  _FormOption('OFFLINE', '线下模板评估',
+  _FormOption('OFFLINE', 'C-PEP3',
       '适用于线下 A/B 卷评估；老师用纸质题本评估后录入题号对应选项。'),
   _FormOption('VB', 'VB（言语行为评估）',
       '含总项目 / 子项目层级结构；按 P（通过）/ A（辅助）评级。'),
+  _FormOption('PEP3', 'PEP-3',
+      '教师为 9 个领域填预估月龄，按年龄反查档位直接出报告（不答题）。'),
 ];
 
 /// 量表单选行：与 [_TypeChoice] 同一视觉语言，改为纵向列表以容纳说明文字。
