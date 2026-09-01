@@ -53,6 +53,10 @@ import 'package:teacher_app/features/rehab/presentation/iep_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/add_iep_goal_screen.dart';
 import 'package:teacher_app/features/office/leave_list_screen.dart';
 import 'package:teacher_app/features/office/leave_apply_screen.dart';
+import 'package:teacher_app/features/office/mailbox_screen.dart';
+import 'package:teacher_app/features/office/mailbox_compose_screen.dart';
+import 'package:teacher_app/features/notice/screens/message_list_screen.dart';
+import 'package:teacher_app/features/notice/screens/message_detail_screen.dart';
 import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/core/app_navigator.dart';
 import 'package:teacher_app/shared/app_shell.dart';
@@ -460,6 +464,29 @@ final GoRouter appRouter = GoRouter(
       path: '/office/leave/new',
       builder: (BuildContext context, GoRouterState state) =>
           const LeaveApplyScreen(),
+    ),
+    // ── 员工信箱（App 办公页：发消息给同事，可群发，保留 30 天）──
+    GoRoute(
+      path: '/office/mailbox',
+      builder: (BuildContext context, GoRouterState state) =>
+          const MailboxScreen(),
+    ),
+    GoRoute(
+      path: '/office/mailbox/compose',
+      builder: (BuildContext context, GoRouterState state) =>
+          const MailboxComposeScreen(),
+    ),
+    // ── 消息通知（站内信，复用 NoticeRepository，点击查看详情并标记已读）──
+    GoRoute(
+      path: '/messages',
+      builder: (BuildContext context, GoRouterState state) =>
+          const MessageListScreen(),
+    ),
+    GoRoute(
+      path: '/messages/detail',
+      builder: (BuildContext context, GoRouterState state) =>
+          MessageDetailScreen(
+              notice: state.extra as Map<String, dynamic>),
     ),
     GoRoute(
       path: '/seal/apply',

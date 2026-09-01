@@ -53,6 +53,13 @@ class OfficeScreen extends StatelessWidget {
         route: '/messages',
         gradient: AppGradients.purple,
       ),
+      const _OfficeEntry(
+        icon: Icons.mail_outline_rounded,
+        label: '员工信箱',
+        subtitle: '发消息 / 可群发',
+        route: '/office/mailbox',
+        gradient: AppGradients.sky,
+      ),
     ];
 
     return Scaffold(
@@ -83,7 +90,7 @@ class OfficeScreen extends StatelessWidget {
                               fontWeight: FontWeight.w800,
                             )),
                         SizedBox(height: 4),
-                        Text('签到 / 请假 / 用章 / 报销 / 消息',
+                        Text('签到 / 请假 / 用章 / 报销 / 消息 / 信箱',
                             style: TextStyle(
                                 fontSize: AppFontSize.small,
                                 color: AppPalette.inkMute)),

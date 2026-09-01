@@ -134,6 +134,45 @@ class ApiClient {
     }
     throw ApiException(msg, resp.statusCode);
   }
+
+  /// 上传图片（multipart/form-data → POST /api/attachment/upload）。
+  /// 成功返回后端保存的相对地址（如 /api/attachment/file/202609/xxx.jpg），
+  /// 展示时自行拼接 [AppConstants.apiBaseUrl]。
+  Future<String> uploadImage(String filePath) async {
+    final Uri uri =
+        Uri.parse('${AppConstants.apiBaseUrl}/api/attachment/upload');
+    final http.MultipartRequest req = http.MultipartRequest('POST', uri);
+    final String? token = AuthStore.instance.token;
+    if (token != null && token.isNotEmpty) {
+      req.headers['Authorization'] = 'Bearer $token';
+    }
+    req.files.add(await http.MultipartFile.fromPath('file', filePath));
+    http.StreamedResponse resp;
+    try {
+      resp = await req.send().timeout(ApiTimeouts.overall);
+    } on TimeoutException {
+      throw const ApiException('图片上传超时，请检查网络或后端');
+    } on Exception catch (e) {
+      throw ApiException('图片上传失败：$e');
+    }
+    final String body = await resp.stream.bytesToString();
+    dynamic decoded;
+    try {
+      decoded = body.isEmpty ? null : jsonDecode(body);
+    } catch (_) {
+      decoded = null;
+    }
+    if (resp.statusCode >= 200 && resp.statusCode < 300 && decoded is Map) {
+      final int code = (decoded['code'] as int?) ?? -1;
+      if (code != 0) {
+        throw ApiException((decoded['msg'] as String?) ?? '图片上传失败');
+      }
+      final dynamic data = decoded['data'];
+      if (data is Map && data['url'] != null) return data['url'].toString();
+      if (data is String) return data;
+    }
+    throw ApiException('图片上传失败（${resp.statusCode}）');
+  }
 }
 
 /// 把 [Map] 过滤掉 null 后全部 toString，供 queryParameters 序列化使用。
