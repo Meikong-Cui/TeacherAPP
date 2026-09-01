@@ -389,6 +389,34 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
     if (_formCode.isEmpty) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+    if (_formCode == 'PEP3') {
+      // PEP-3 不答 A/B 卷，没有题项可录入——引导到「填预估月龄」页。
+      return Scaffold(
+        appBar: AppBar(title: const Text('PEP-3 评估')),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Icon(Icons.child_care_outlined, size: 48, color: Colors.indigo),
+                const SizedBox(height: 12),
+                const Text(
+                  'PEP-3 不需要录入题目。\n请直接填写各领域的预估年龄，提交后自动生成报告。',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => context.pushReplacement(
+                      '/rehab-autism/${widget.archiveId}/pep3-home'),
+                  child: const Text('去填写预估年龄'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
     final AsyncValue<List<AutismEvalRound>> roundsAsync =
         ref.watch(evalRoundsProvider('${widget.archiveId}|$_formCode'));
@@ -490,6 +518,8 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
         return 'VB 教师卷评估录入';
       case 'VB':
         return 'VB 评估录入';
+      case 'PEP3':
+        return 'PEP-3 评估录入';
       case 'STANDARD':
       default:
         return '残联标准评估录入';
