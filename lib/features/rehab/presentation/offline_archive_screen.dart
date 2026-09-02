@@ -352,14 +352,19 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
           const SnackBar(content: Text('已提交，正在出分…')));
       if (widget.paper == 'A') {
         // A卷 提交 → 紧接着答 B卷（同路由，仅 paper 改变）。
+        // 编辑历史轮次时（widget.roundId != null）必须把 roundId 带过去，否则 B 屏拿不到
+        // roundId 会误调 createOfflineRound 创建一个新轮次，破坏「编辑原轮次」的语义。
+        final String editQs =
+            widget.roundId != null ? '&roundId=${widget.roundId}' : '';
         context.pushReplacement(
-            '/rehab/${widget.archiveId}/offline-answer?paper=B');
+            '/rehab/${widget.archiveId}/offline-answer?paper=B$editQs');
         return;
       }
       // B卷 提交 → 新一轮评估自动归档（这样历史记录里能看到本次评估），
       // 再进入「评估结果」页看得分与导出报告。回看历史轮次时不重复归档。
-      int? roundId;
-      if (widget.roundId == null) {
+      // 编辑既有轮次（widget.roundId != null）时直接沿用原 roundId，不再建新轮次。
+      int? roundId = widget.roundId;
+      if (roundId == null) {
         try {
           roundId = await ref
               .read(rehabRepositoryProvider)
