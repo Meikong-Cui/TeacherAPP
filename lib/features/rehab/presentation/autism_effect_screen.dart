@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/data/autism_questions.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
+import 'package:teacher_app/shared/handwritten_uploader.dart';
 
 /// 训练效果评估表（文档三）。
 ///
@@ -259,6 +260,13 @@ class _AutismEffectScreenState extends ConsumerState<AutismEffectScreen> {
       body: ListView(
         padding: const EdgeInsets.all(12),
         children: <Widget>[
+          HandwrittenUploader(
+            archiveId: widget.archiveId,
+            section: 'STANDARD_EFFECT',
+            title: '训练效果评估表 · 手写板',
+            compact: true,
+          ),
+          const SizedBox(height: 8),
           Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding:

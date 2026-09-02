@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:teacher_app/shared/handwritten_uploader.dart';
 import 'package:teacher_app/shared/ui.dart';
 
 /// 残联标准模板下钻页：从儿童中枢页「残联标准模板」卡片进入。
@@ -47,6 +48,70 @@ class RehabTemplateDetailScreen extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+          // ⚠ 残联标准模板改版提示横幅：醒目橙色，强制要求上传手写板。
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: <Color>[Color(0xFFFFE082), Color(0xFFFFB300)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: <BoxShadow>[
+                BoxShadow(
+                    color: Colors.amber.withValues(alpha: 0.35),
+                    blurRadius: 8, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Icon(Icons.warning_amber_rounded,
+                      color: Colors.brown, size: 26),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      const Text(
+                        '⚠ 残联标准模板已改版',
+                        style: TextStyle(
+                            color: Colors.brown,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isAutism
+                            ? '所有 6 个模块（评测量表 / 评估历史 / IEP / 月教学计划 / 训练效果 / 评估图表）'
+                                '必须提交手写板图片，可在下方或各模块页内上传。'
+                            : '听障模板需提交手写照片补全当前线上版本之外的内容。',
+                        style: TextStyle(
+                            color: Colors.brown.shade900, fontSize: 12.5),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 全局手写板封面：方便老师先扫一张汇总图。各模块页里也有专门的上传区。
+          const SizedBox(height: 12),
+          HandwrittenUploader(
+            archiveId: archiveId,
+            section: isAutism ? 'STANDARD_OVERVIEW_AUTISM' : 'STANDARD_OVERVIEW_HEARING',
+            title: isAutism ? '残联标准模板 · 总览手写板' : '残联标准模板（听障）· 总览手写板',
+            subtitle: '可上传 1 张整体手写板汇总图；具体各模块仍可在子页里单独上传。',
+            compact: false,
           ),
           const SizedBox(height: 16),
           GridView.count(

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_app/data/models/iep_plan.dart';
 import 'package:teacher_app/features/rehab/provider/iep_provider.dart';
+import 'package:teacher_app/shared/handwritten_uploader.dart';
 
 /// 个别化教育计划 (IEP) 屏幕：与「月教学计划」独立。
 ///
@@ -121,7 +122,20 @@ class _IepScreenState extends ConsumerState<IepScreen> {
       return const Center(child: CircularProgressIndicator());
     }
     if (!st.hasGoals) {
-      return _EmptyState(archiveId: widget.archiveId);
+      // 无目标时仍展示手写板上传区，方便老师先把纸质 IEP 上传备查。
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          HandwrittenUploader(
+            archiveId: widget.archiveId,
+            section: 'STANDARD_IEP',
+            title: 'IEP 干预计划 · 手写板',
+            compact: true,
+          ),
+          const SizedBox(height: 16),
+          _EmptyState(archiveId: widget.archiveId),
+        ],
+      );
     }
     return _buildContent(context, st);
   }
@@ -138,6 +152,13 @@ class _IepScreenState extends ConsumerState<IepScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: <Widget>[
+        HandwrittenUploader(
+          archiveId: widget.archiveId,
+          section: 'STANDARD_IEP',
+          title: 'IEP 干预计划 · 手写板',
+          compact: true,
+        ),
+        const SizedBox(height: 12),
         // 元信息卡（可编辑）
         Card(
           child: Padding(

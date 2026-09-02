@@ -6,6 +6,7 @@ import 'package:teacher_app/features/rehab/presentation/widgets/development_prof
 import 'package:teacher_app/features/rehab/presentation/widgets/emotion_ring_chart.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 import 'package:teacher_app/features/rehab/services/chart_export.dart';
+import 'package:teacher_app/shared/handwritten_uploader.dart';
 
 /// 评估图表：发展情况剖面图（竖线，可点选）+ 情绪行为表现图（同心圆环，可涂黑）+ 折线图。
 ///
@@ -261,6 +262,12 @@ class _AutismChartsScreenState extends ConsumerState<AutismChartsScreen> {
               : ListView(
                   padding: const EdgeInsets.all(12),
                   children: <Widget>[
+                    HandwrittenUploader(
+                      archiveId: widget.archiveId,
+                      section: 'STANDARD_CHART',
+                      title: '评估图表 · 手写板',
+                      compact: true,
+                    ),
                     if (empty)
                       Container(
                         margin: const EdgeInsets.only(bottom: 12),

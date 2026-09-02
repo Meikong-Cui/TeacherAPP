@@ -5,6 +5,7 @@ import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/data/autism_questions.dart';
 import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
+import 'package:teacher_app/shared/handwritten_uploader.dart';
 
 /// 多量表评估录入：选择评估轮次 → 按量表题项逐题作答并保存。
 ///
@@ -468,6 +469,14 @@ class _AutismScaleEvalScreenState extends ConsumerState<AutismScaleEvalScreen> {
         data: (rounds) => ListView(
           padding: const EdgeInsets.all(12),
           children: <Widget>[
+            if (_formCode == 'STANDARD')
+              HandwrittenUploader(
+                archiveId: widget.archiveId,
+                section: 'STANDARD_FORM',
+                title: '评测量表 · 手写板',
+                compact: true,
+              ),
+            if (_formCode == 'STANDARD') const SizedBox(height: 12),
             _RoundSelector(
               rounds: rounds,
               selectedId: _roundId,

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:teacher_app/data/models/autism_eval_item.dart';
 import 'package:teacher_app/features/rehab/provider/autism_eval_provider.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
+import 'package:teacher_app/shared/handwritten_uploader.dart';
 
 /// 评估历史独立页（孤独症档案专用）。
 /// 从儿童中枢页「评估历史」卡片进入，展示 VB 教师卷 / VB 家长卷 / C-PEP3（OFFLINE）/
@@ -25,6 +26,13 @@ class EvalHistoryScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
+          HandwrittenUploader(
+            archiveId: archiveId,
+            section: 'STANDARD_HISTORY',
+            title: '评估历史 · 手写板',
+            compact: true,
+          ),
+          const SizedBox(height: 12),
           _EvalHistoryBody(archiveId: archiveId),
           const SizedBox(height: 16),
         ],

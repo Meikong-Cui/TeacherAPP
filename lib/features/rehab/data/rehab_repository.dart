@@ -153,14 +153,48 @@ class RehabRepository {
   }
 
   /// 档案照片列表。
-  Future<List<RehabPhoto>> listPhotos(String archiveId) async {
-    final dynamic data = await apiClient
-        .get('${AppConstants.rehabPath}/photos/archive/$archiveId');
+  Future<List<RehabPhoto>> listPhotos(String archiveId, {String? formType}) async {
+    final StringBuffer sb = StringBuffer(
+        '${AppConstants.rehabPath}/photos/archive/$archiveId');
+    if (formType != null && formType.isNotEmpty) {
+      sb.write('?formType=${Uri.encodeQueryComponent(formType)}');
+    }
+    final dynamic data = await apiClient.get(sb.toString());
     if (data is! List) return const <RehabPhoto>[];
     return data
         .whereType<Map<String, dynamic>>()
         .map((e) => RehabPhoto.fromJson(e))
         .toList();
+  }
+
+  /// 把已经上传到 /api/attachment 的图片 URL 落地为 rehab_photo 一条记录。
+  /// [archiveId] [relatedFormType] [filePath] 必填；其他字段可空。
+  Future<int> savePhotoRecord({
+    required String archiveId,
+    required String relatedFormType,
+    required String filePath,
+    int? fileSize,
+    String? mimeType,
+    String? remark,
+  }) async {
+    final dynamic data = await apiClient.post(
+      '${AppConstants.rehabPath}/photos',
+      <String, dynamic>{
+        'archiveId': archiveId,
+        'relatedFormType': relatedFormType,
+        'filePath': filePath,
+        if (fileSize != null) 'fileSize': fileSize,
+        if (mimeType != null) 'mimeType': mimeType,
+        if (remark != null) 'remark': remark,
+      },
+    );
+    if (data is int) return data;
+    return int.tryParse(data?.toString() ?? '0') ?? 0;
+  }
+
+  /// 删除一条手写照片。
+  Future<void> removePhoto(String photoId) async {
+    await apiClient.delete('${AppConstants.rehabPath}/photos/$photoId');
   }
 
   /// 我（及相关儿童）的待办任务。

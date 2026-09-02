@@ -6,6 +6,7 @@ import 'package:teacher_app/data/models/autism_archive.dart';
 import 'package:teacher_app/features/rehab/provider/autism_provider.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
+import 'package:teacher_app/shared/handwritten_uploader.dart';
 import 'package:teacher_app/shared/ui.dart';
 
 /// 孤独症月教学计划：调用 DeepSeek LLM 智能生成（参考历史最新 5 份）。
@@ -332,6 +333,13 @@ class _AutismMonthlyPlanAiScreenState
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
+          HandwrittenUploader(
+            archiveId: widget.archiveId,
+            section: 'STANDARD_MONTHLY',
+            title: '月教学计划 · 手写板',
+            compact: true,
+          ),
+          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
