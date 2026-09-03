@@ -88,12 +88,17 @@ class _OfflineGuidanceSelectScreenState
     if (round == null) return;
     // 必须取未过滤原文（evalReportTRaw / PRaw）：evalReportT/P 已被上次的选择
     // 裁剪过，用它派生小项会导致上次没勾的选项永久消失、无法再勾回。
-    final String reportKey =
-        _role == 'TEACHER' ? 'evalReportTRaw' : 'evalReportPRaw';
+    // 兼容尚未升级的后端（不返回 Raw 键）：退回已过滤的 evalReportT/P。
+    // 此时退化为旧行为（未勾选项不可再勾回，保存也只写教师版列），
+    // 但页面不会空白报「尚未生成报告」——避免 APP 比后端先发版时整页不可用。
+    final String rawKey = _role == 'TEACHER' ? 'evalReportTRaw' : 'evalReportPRaw';
+    final String fallbackKey = _role == 'TEACHER' ? 'evalReportT' : 'evalReportP';
     final String selKey = _role == 'TEACHER' ? 'selectedEvalItemsT' : 'selectedEvalItemsP';
-    final Map<String, dynamic>? report = round[reportKey] is Map
-        ? round[reportKey] as Map<String, dynamic>
-        : null;
+    final Map<String, dynamic>? report = round[rawKey] is Map
+        ? round[rawKey] as Map<String, dynamic>
+        : (round[fallbackKey] is Map
+            ? round[fallbackKey] as Map<String, dynamic>
+            : null);
     final List<dynamic> rawRows = report == null
         ? const <dynamic>[]
         : (report['rows'] is List ? report['rows'] as List : const <dynamic>[]);
@@ -113,7 +118,10 @@ class _OfflineGuidanceSelectScreenState
         <String, Map<String, Set<int>>>{};
     final Map<String, dynamic>? saved = round[selKey] is Map
         ? round[selKey] as Map<String, dynamic>
-        : null;
+        // 老后端只有 selectedEvalItems 这个别名（等同教师版），没有 T/P 拆分键。
+        : (_role == 'TEACHER' && round['selectedEvalItems'] is Map
+            ? round['selectedEvalItems'] as Map<String, dynamic>
+            : null);
     for (final Map<String, dynamic> r in list) {
       final String p = r['project'].toString();
       if (saved != null && saved[p] is Map) {
