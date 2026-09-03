@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:teacher_app/features/workflow/approval_badge.dart';
 
 /// 底部 Tab 导航壳（由 GoRouter StatefulShellRoute 驱动）。
-class AppShell extends StatelessWidget {
+///
+/// 「办公」Tab 图标右上角有红点角标 = 审批待办 + 未读通知合计数，
+/// 数据来自 [approvalBadgeProvider]（全局 60 秒轮询，不依赖停留在哪个页面）。
+class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
@@ -14,8 +19,12 @@ class AppShell extends StatelessWidget {
     _Tab('我的', Icons.person_outline, Icons.person, '/profile'),
   ];
 
+  /// 「办公」Tab 的下标（红点挂在这一项上）。
+  static const int _officeTabIndex = 2;
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final int badge = ref.watch(approvalBadgeProvider);
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
@@ -24,12 +33,24 @@ class AppShell extends StatelessWidget {
         destinations: <Widget>[
           for (int i = 0; i < _tabs.length; i++)
             NavigationDestination(
-              icon: Icon(_tabs[i].icon),
-              selectedIcon: Icon(_tabs[i].selectedIcon),
+              icon: _tabIcon(_tabs[i].icon, i, badge),
+              selectedIcon: _tabIcon(_tabs[i].selectedIcon, i, badge),
               label: _tabs[i].label,
             ),
         ],
       ),
+    );
+  }
+
+  /// 办公 Tab 包一层 Badge（有角标时显示数字，超过 99 显示 99+）；
+  /// 其余 Tab 原样返回。
+  Widget _tabIcon(IconData icon, int index, int badge) {
+    if (index != _officeTabIndex || badge <= 0) {
+      return Icon(icon);
+    }
+    return Badge(
+      label: Text(badge > 99 ? '99+' : '$badge'),
+      child: Icon(icon),
     );
   }
 }

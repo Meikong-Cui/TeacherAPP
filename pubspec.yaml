@@ -23,6 +23,9 @@ dependencies:
   record: ^5.1.0
   path_provider: ^2.1.4
   cupertino_icons: ^1.0.6
+  # 桌面 App 图标角标（iOS UIApplication.applicationIconBadgeNumber /
+  # Android 各厂商 ShortcutBadger）。仅设置角标数字，iOS 上不需要通知权限。
+  flutter_app_badger: ^1.5.0
 
 dev_dependencies:
   flutter_test:

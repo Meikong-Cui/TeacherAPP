@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_app/app/design_tokens.dart';
+import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/shared/ui.dart';
 
-/// 办公页：行政 / 行政类功能入口（签到、用章、报销、请假、消息）。
+/// 办公页：行政 / 行政类功能入口（签到、用章、报销、请假、消息、审批）。
 /// 「我的」页只保留个人设置，办公功能全部移至此处。
+///
+/// 带 [roles] 的入口只对相应角色可见：如「审批」仅财务/园长/管理员可见，
+/// 教师等角色看不到也进不去（后端同样有角色校验，双保险）。
 class OfficeScreen extends StatelessWidget {
   const OfficeScreen({super.key});
 
@@ -60,7 +64,26 @@ class OfficeScreen extends StatelessWidget {
         route: '/office/mailbox',
         gradient: AppGradients.sky,
       ),
+      // 统一审批入口：进去后按类型分卡片（请假 / 补卡 / 报销 …）。
+      // 仅财务 / 园长 / 管理员可见；教师等其他角色看不到此入口，
+      // 也无权审批他人（后端 /api/workflow/instances/todo 已按审批人过滤）。
+      const _OfficeEntry(
+        icon: Icons.approval_outlined,
+        label: '审批',
+        subtitle: '请假 / 补卡 / 报销',
+        route: '/approval',
+        gradient: AppGradients.teal,
+        roles: <String>['FINANCE', 'PRINCIPAL', 'ADMIN'],
+      ),
     ];
+
+    // 按角色过滤入口：未设 roles 的对所有人可见。
+    final List<_OfficeEntry> visible = entries
+        .where((_OfficeEntry e) =>
+            e.roles == null ||
+            e.roles!.isEmpty ||
+            e.roles!.any(AuthStore.instance.hasRole))
+        .toList();
 
     return Scaffold(
       body: SafeArea(
@@ -114,9 +137,9 @@ class OfficeScreen extends StatelessWidget {
                 mainAxisSpacing: 12,
                 childAspectRatio: 1.45,
               ),
-              itemCount: entries.length,
+              itemCount: visible.length,
               itemBuilder: (BuildContext ctx, int i) {
-                final _OfficeEntry e = entries[i];
+                final _OfficeEntry e = visible[i];
                 return _OfficeCard(entry: e);
               },
             ),
@@ -134,12 +157,16 @@ class _OfficeEntry {
     required this.subtitle,
     required this.route,
     required this.gradient,
+    this.roles,
   });
   final IconData icon;
   final String label;
   final String subtitle;
   final String route;
   final Gradient gradient;
+  /// 可见角色（PRINCIPAL / ADMIN / FINANCE / TEACHER …）。
+  /// 为 null 或空表示所有角色可见。
+  final List<String>? roles;
 }
 
 class _OfficeCard extends StatelessWidget {

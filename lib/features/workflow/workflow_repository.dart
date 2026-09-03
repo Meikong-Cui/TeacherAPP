@@ -27,6 +27,12 @@ class WorkflowInstance {
     this.status,
     this.currentNodeName,
     this.logs = const <dynamic>[],
+    this.templateName,
+    this.applicantName,
+    this.formValues = const <String, dynamic>{},
+    this.businessType,
+    this.businessId,
+    this.createTime,
   });
 
   final int id;
@@ -35,13 +41,41 @@ class WorkflowInstance {
   final String? currentNodeName;
   final List<dynamic> logs;
 
+  /// 流程模板名（如「请假审批」「费用报销」），用于统一审批页按类型分卡片。
+  final String? templateName;
+  /// 申请人姓名。
+  final String? applicantName;
+  /// 发起时填写的表单值（字段标签 -> 值）。
+  final Map<String, dynamic> formValues;
+  /// 关联业务类型（reimbursement / oa_record …）与业务 id。
+  final String? businessType;
+  final int? businessId;
+  final String? createTime;
+
   factory WorkflowInstance.fromJson(Map<String, dynamic> j) => WorkflowInstance(
         id: (j['id'] as num?)?.toInt() ?? 0,
         instanceNo: j['instanceNo'] as String?,
         status: (j['status'] as num?)?.toInt(),
         currentNodeName: j['currentNodeName'] as String?,
         logs: (j['logs'] as List?) ?? const <dynamic>[],
+        templateName: j['templateName'] as String?,
+        applicantName: j['applicantName'] as String?,
+        formValues: (j['formValues'] is Map)
+            ? Map<String, dynamic>.from(j['formValues'] as Map)
+            : const <String, dynamic>{},
+        businessType: j['businessType'] as String?,
+        businessId: (j['businessId'] as num?)?.toInt(),
+        createTime: j['createTime']?.toString(),
       );
+
+  /// 摘要行：优先取表单里的标题/事由类字段，退回模板名。
+  String get summaryText {
+    for (final String key in <String>['报销标题', '请假事由', '原因说明', '用章事由', '标题']) {
+      final Object? v = formValues[key];
+      if (v != null && v.toString().trim().isNotEmpty) return v.toString();
+    }
+    return templateName ?? '审批申请';
+  }
 
   String get statusLabel {
     switch (status) {
@@ -131,6 +165,14 @@ class WorkflowRepository {
         .whereType<Map<String, dynamic>>()
         .map(WorkflowInstance.fromJson)
         .toList();
+  }
+
+  /// 审批概览：{todoTotal, byTemplate:{模板名:数}, byBusinessType:{…}, noticeUnread}
+  /// 供统一审批页各卡片角标与底部导航红点使用（一次请求拿全，避免多次轮询）。
+  Future<Map<String, dynamic>> fetchSummary() async {
+    final dynamic data = await _client.get('/api/approval/summary');
+    if (data is Map<String, dynamic>) return data;
+    return <String, dynamic>{'todoTotal': 0};
   }
 
   Future<void> approve(int id, [String? comment]) async {

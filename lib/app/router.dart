@@ -20,6 +20,7 @@ import 'package:teacher_app/features/rehab/presentation/eval_history_screen.dart
 import 'package:teacher_app/features/rehab/presentation/add_child_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/edit_child_screen.dart';
 import 'package:teacher_app/features/office/office_screen.dart';
+import 'package:teacher_app/features/workflow/presentation/approval_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_items_editor_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_archive_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_subitem_parser.dart';
@@ -366,6 +367,20 @@ final GoRouter appRouter = GoRouter(
         template: 'PEP3',
         role: state.uri.queryParameters['role'] ?? 'TEACHER',
         returnToReport: state.uri.queryParameters['from'] == 'report',
+      ),
+    ),
+    // 统一审批入口：办公页入口 → 按类型分卡片 → 各类型待办列表（通过/驳回）。
+    // 仅财务/园长/管理员在办公页可见入口；后端 listTodo 也按当前节点审批人过滤。
+    GoRoute(
+      path: '/approval',
+      builder: (BuildContext context, GoRouterState state) =>
+          const ApprovalScreen(),
+    ),
+    GoRoute(
+      path: '/approval/list',
+      builder: (BuildContext context, GoRouterState state) =>
+          ApprovalListScreen(
+        type: state.uri.queryParameters['type'] ?? '',
       ),
     ),
     GoRoute(
