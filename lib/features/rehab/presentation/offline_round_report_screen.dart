@@ -1,11 +1,17 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
 import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 /// 单个评估轮次的报告查看页（不可变快照），支持教师版/家长版切换与 PDF 导出。
+///
+/// 本页只做展示：报告内容由后端按该轮次已保存的小项选择过滤后返回
+/// （教师版 evalReportT / 家长版 evalReportP 各自独立），
+/// 因此屏幕上看到的与导出的 PDF 必然一致。
+/// 要修改勾选请用右上角「重新挑选」，跳到挑选页改完再回来。
 ///
 /// PEP-3 与线下模板（OFFLINE）共用同一套 9 行报告结构，因此本页用 [template]
 /// 区分数据来源：'OFFLINE'（默认）读线下模板轮次，'PEP3' 读 PEP-3 轮次。
@@ -67,6 +73,20 @@ class _OfflineRoundReportScreenState
     return r;
   }
 
+  /// 跳到本轮次的小项挑选页，并带上当前查看的版本（教师版 / 家长版）。
+  ///
+  /// `from=report` 让挑选页保存后 pop(true) 回来，本页随即重新拉取，
+  /// 避免 push 出第二个报告页导致返回键退到数据过期的旧页。
+  Future<void> _rePick() async {
+    final String path = _isPep3
+        ? '/rehab/${widget.archiveId}/pep3-guidance/${widget.roundId}?role=$_role&from=report'
+        : '/rehab/${widget.archiveId}/offline-guidance/${widget.roundId}?role=$_role&from=report';
+    final dynamic changed = await context.push<dynamic>(path);
+    if (changed == true && mounted) {
+      await _load();
+    }
+  }
+
   Future<void> _exportPdf() async {
     setState(() => _exporting = true);
     try {
@@ -96,6 +116,14 @@ class _OfflineRoundReportScreenState
       appBar: AppBar(
         title: Text('第 $seq 次 · $roleLabel评估报告'),
         actions: <Widget>[
+          // 「重新挑选」：本页只展示后端按已保存小项过滤后的结果，
+          // 要修改勾选必须回到挑选页（教师版/家长版各自独立保存）。
+          // 挑选页保存后会 pushReplacement 回本页，所以返回即看到最新选择。
+          IconButton(
+            icon: const Icon(Icons.checklist),
+            tooltip: '重新挑选康复目标',
+            onPressed: _round == null ? null : _rePick,
+          ),
           if (_exporting)
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 12),

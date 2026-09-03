@@ -586,12 +586,14 @@ class RehabRepository {
 
   /// 保存某轮评估报告「康复目标 / 指导说明」的小项勾选结果。
   /// [items] 结构：project -> { 'rehabGoal': [序号...], 'guidance': [序号...] }。
+  /// [role] TEACHER / PARENT：教师版与家长版各自独立存储，互不影响。
   /// 后端 POST /autism/offline/rounds/{id}/guidance
   Future<void> saveOfflineRoundGuidance(
-      String roundId, Map<String, Map<String, List<int>>> items) async {
+      String roundId, Map<String, Map<String, List<int>>> items,
+      {String role = 'TEACHER'}) async {
     await apiClient.post(
       '$_autismPath/offline/rounds/${Uri.encodeQueryComponent(roundId)}/guidance',
-      <String, dynamic>{'items': items},
+      <String, dynamic>{'items': items, 'role': role},
     );
   }
 
@@ -704,12 +706,14 @@ class RehabRepository {
   }
 
   /// 保存某轮 PEP-3 报告「康复目标 / 指导说明」的小项勾选结果。
+  /// [role] TEACHER / PARENT：教师版与家长版各自独立存储，互不影响。
   /// 后端 POST /autism/pep3/rounds/{id}/guidance
   Future<void> savePep3RoundGuidance(
-      String roundId, Map<String, Map<String, List<int>>> items) async {
+      String roundId, Map<String, Map<String, List<int>>> items,
+      {String role = 'TEACHER'}) async {
     await apiClient.post(
       '$_autismPath/pep3/rounds/${Uri.encodeQueryComponent(roundId)}/guidance',
-      <String, dynamic>{'items': items},
+      <String, dynamic>{'items': items, 'role': role},
     );
   }
 

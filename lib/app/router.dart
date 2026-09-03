@@ -317,6 +317,8 @@ final GoRouter appRouter = GoRouter(
           OfflineGuidanceSelectScreen(
         archiveId: state.pathParameters['id'] ?? '',
         roundId: state.pathParameters['roundId'] ?? '',
+        role: state.uri.queryParameters['role'] ?? 'TEACHER',
+        returnToReport: state.uri.queryParameters['from'] == 'report',
       ),
     ),
     // PEP-3：复刻线下模板报告但去掉答题，教师直接填各领域预估年龄。
@@ -362,6 +364,8 @@ final GoRouter appRouter = GoRouter(
         archiveId: state.pathParameters['id'] ?? '',
         roundId: state.pathParameters['roundId'] ?? '',
         template: 'PEP3',
+        role: state.uri.queryParameters['role'] ?? 'TEACHER',
+        returnToReport: state.uri.queryParameters['from'] == 'report',
       ),
     ),
     GoRoute(

@@ -14,6 +14,7 @@ import 'dart:convert';
 /// - 不以数字编号开头的行（如「操作模仿」）视为分类标题，不参与勾选，
 ///   但当其下没有任何被选中的小项时，该标题会被一并剔除。
 /// - 过滤时只保留被选中的小项；某小项被剔除后，其原始编号保留（不重新编号）。
+/// - 整段文本没有任何编号小项时（家长版概括式段落）原样返回，不清空。
 ///
 /// 前后端（Java / Dart）必须采用完全相同的编号识别与过滤规则，
 /// 否则前端算出的小项序号与后端过滤无法对齐。
@@ -82,6 +83,12 @@ bool _headerKept(List<_Line> lines, int pos, Set<int> selected) {
 String filterSubItems(String text, Set<int>? selected) {
   if (selected == null) return text;
   final List<_Line> lines = _parseLines(text);
+  // 该块文本本身没有带编号的小项（如家长版概括式段落）时，原样保留，
+  // 避免被整段清空——否则家长版指导说明会因 selection 中无对应序号而被抹掉。
+  // 必须与后端 OfflineTemplateService.filterSubItems 保持完全一致，
+  // 否则屏幕预览与导出 PDF 的内容会对不上。
+  final bool hasItemLines = lines.any((_Line l) => l.isItem);
+  if (!hasItemLines) return text;
   final StringBuffer sb = StringBuffer();
   for (int i = 0; i < lines.length; i++) {
     final _Line l = lines[i];

@@ -363,7 +363,11 @@ class _OfflineAnswerScreenState extends ConsumerState<OfflineAnswerScreen> {
       // B卷 提交 → 新一轮评估自动归档（这样历史记录里能看到本次评估），
       // 再进入「评估结果」页看得分与导出报告。回看历史轮次时不重复归档。
       // 编辑既有轮次（widget.roundId != null）时直接沿用原 roundId，不再建新轮次。
-      int? roundId = widget.roundId;
+      // widget.roundId 来自 URL 查询参数，是 String?；而 createOfflineRound 返回 int。
+      // 两者类型不同，必须在此显式转换（编辑历史轮次时靠它复用原 roundId，
+      // 转换失败或本来就为空才新建轮次）。
+      int? roundId =
+          widget.roundId == null ? null : int.tryParse(widget.roundId!);
       if (roundId == null) {
         try {
           roundId = await ref
@@ -792,6 +796,30 @@ class _OfflineSubmitResultScreenState
   String _str(dynamic v, [String fallback = '-']) =>
       (v == null || v.toString().isEmpty) ? fallback : v.toString();
 
+  /// 报告页跳转路径。
+  ///
+  /// 已归档（[OfflineSubmitResultScreen.roundId] 非空）时打开**轮次报告**：
+  /// 轮次里的报告就是归档那一刻档案级报告的快照（后端
+  /// `round.evalReportTJson = getEvalReport(archiveId, "TEACHER")`），
+  /// 且后端已按「挑选康复目标」保存的小项过滤 —— 因此看到的、导出的
+  /// 都与之前勾选的一致，不会像档案级入口那样每次进入都从「全选」重来。
+  ///
+  /// 归档失败（roundId 为 null）时没有轮次可依附，退回档案级报告入口。
+  String _reportPath(String role) {
+    final String? rid = widget.roundId;
+    if (rid == null) {
+      final String title =
+          role == 'TEACHER' ? '教师版评估报告' : '家长版评估报告';
+      return '/rehab/${widget.archiveId}/offline-eval-guidance'
+          '?type=$role&title=${Uri.encodeQueryComponent(title)}';
+    }
+    return '/rehab/${widget.archiveId}/offline-round/$rid?role=$role';
+  }
+
+  String get _reportSubtitle => widget.roundId == null
+      ? '按所选小项查看并导出 PDF'
+      : '按已保存的挑选结果查看与导出，可在报告页重新挑选';
+
   @override
   Widget build(BuildContext context) {
     final ColorScheme colors = Theme.of(context).colorScheme;
@@ -830,21 +858,15 @@ class _OfflineSubmitResultScreenState
                     context,
                     Icons.school_outlined,
                     '教师版评估报告',
-                    '按所选小项查看并导出 PDF',
-                    () => context.push(
-                      '/rehab/${widget.archiveId}/offline-eval-guidance'
-                      '?type=TEACHER&title=${Uri.encodeQueryComponent('教师版评估报告')}',
-                    ),
+                    _reportSubtitle,
+                    () => context.push(_reportPath('TEACHER')),
                   ),
                   _action(
                     context,
                     Icons.family_restroom_outlined,
                     '家长版评估报告',
-                    '按所选小项查看并导出 PDF',
-                    () => context.push(
-                      '/rehab/${widget.archiveId}/offline-eval-guidance'
-                      '?type=PARENT&title=${Uri.encodeQueryComponent('家长版评估报告')}',
-                    ),
+                    _reportSubtitle,
+                    () => context.push(_reportPath('PARENT')),
                   ),
                   _action(
                     context,

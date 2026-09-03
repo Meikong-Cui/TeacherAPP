@@ -64,7 +64,7 @@ class _OfflineEvalGuidanceSelectScreenState
     try {
       final repo = ref.read(rehabRepositoryProvider);
       final Map<String, dynamic> report =
-          await repo.getOfflineEvalReport(widget.archiveId, 'TEACHER');
+          await repo.getOfflineEvalReport(widget.archiveId, widget.role);
 
       // 儿童信息（非关键，失败不影响选择）。
       try {
@@ -278,54 +278,56 @@ class _OfflineEvalGuidanceSelectScreenState
     );
   }
 
+  /// 单个领域卡片：可折叠（ExpansionTile），展开后显示康复目标 / 指导说明的小项勾选。
   Widget _buildRowCard(BuildContext context, Map<String, dynamic> r) {
     final String project = r['project'].toString();
     final String refAge = r['refAge'].toString();
     final List<String> goalItems = itemTexts(r['rehabGoal'].toString());
     final List<String> guideItems = itemTexts(r['guidance'].toString());
-    return Card(
-      margin: const EdgeInsets.only(bottom: 14),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Text(project,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w700, fontSize: 16)),
-                ),
-                if (refAge.isNotEmpty)
-                  Text('参考年龄：$refAge',
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.grey)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            _buildField(
-              context,
-              project,
-              '康复目标',
-              'rehabGoal',
-              goalItems,
-              _selected[project]!['rehabGoal']!,
-              (i, v) => _toggle(project, 'rehabGoal', i, v),
-            ),
-            const SizedBox(height: 8),
-            _buildField(
-              context,
-              project,
-              '指导说明',
-              'guidance',
-              guideItems,
-              _selected[project]!['guidance']!,
-              (i, v) => _toggle(project, 'guidance', i, v),
-            ),
-          ],
-        ),
+    return ExpansionTile(
+      initiallyExpanded: true,
+      tilePadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      title: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(project,
+                style: const TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 16)),
+          ),
+          if (refAge.isNotEmpty)
+            Text('参考年龄：$refAge',
+                style: const TextStyle(fontSize: 12, color: Colors.grey)),
+        ],
       ),
+      children: <Widget>[
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              _buildField(
+                context,
+                project,
+                '康复目标',
+                'rehabGoal',
+                goalItems,
+                _selected[project]!['rehabGoal']!,
+                (i, v) => _toggle(project, 'rehabGoal', i, v),
+              ),
+              const SizedBox(height: 8),
+              _buildField(
+                context,
+                project,
+                '指导说明',
+                'guidance',
+                guideItems,
+                _selected[project]!['guidance']!,
+                (i, v) => _toggle(project, 'guidance', i, v),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
