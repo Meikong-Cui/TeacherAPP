@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/clock_record.dart';
@@ -166,24 +167,39 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
           if (state.loading) const SizedBox(height: 12),
           if (state.loading)
             const Center(child: CircularProgressIndicator()),
+          // 阻断性失败（超出围栏 / 定位不可用）：给出原因 + 可操作出口，
+          // 不再是「按钮置灰、页面毫无反应」。
           if (state.error != null) ...<Widget>[
             const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colors.error.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(Icons.warning_amber_rounded, color: colors.error),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(state.error!,
-                        style: TextStyle(color: colors.error)),
-                  ),
-                ],
-              ),
+            MessageBox(
+              color: colors.error,
+              icon: Icons.error_outline,
+              message: state.error!,
+              actions: <Widget>[
+                TextButton.icon(
+                  icon: const Icon(Icons.my_location, size: 16),
+                  label: const Text('重新定位'),
+                  onPressed: state.locating || state.loading
+                      ? null
+                      : () => ref
+                          .read(clockInProvider.notifier)
+                          .fetchLocation(),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.note_alt_outlined, size: 16),
+                  label: const Text('申请补卡'),
+                  onPressed: () => context.push('/supplement/new'),
+                ),
+              ],
+            ),
+          ],
+          // 非阻断提示：定位降级 / 后台同步失败但已本地留存。
+          if (state.notice != null) ...<Widget>[
+            const SizedBox(height: 12),
+            MessageBox(
+              color: Colors.orange.shade800,
+              icon: Icons.info_outline,
+              message: state.notice!,
             ),
           ],
           const SizedBox(height: 16),
@@ -201,9 +217,47 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
                 child: ListTile(
                   leading: Icon(r.type.icon, color: colors.primary),
                   title: Text('${r.type.label} · ${r.campusName}'),
-                  subtitle: Text(
-                      '${_fmt(r.time)} · 距打卡点 ${r.distanceText}'),
-                  trailing: const Icon(Icons.check_circle, color: Colors.green),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Text('${_fmt(r.time)} · 距打卡点 ${r.distanceText}'),
+                      if (!r.synced || r.degradedLocation) ...<Widget>[
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          children: <Widget>[
+                            if (!r.synced)
+                              const Chip(
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                label: Text('待同步',
+                                    style: TextStyle(fontSize: 11)),
+                              ),
+                            if (r.degradedLocation)
+                              const Chip(
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                label: Text('定位降级',
+                                    style: TextStyle(fontSize: 11)),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                  trailing: r.synced
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : TextButton(
+                          onPressed: state.syncing
+                              ? null
+                              : () => ref
+                                  .read(clockInProvider.notifier)
+                                  .retrySync(r),
+                          child: const Text('同步'),
+                        ),
                 ),
               ),
           const SizedBox(height: 16),
@@ -214,6 +268,68 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
 
   String _fmt(DateTime t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+}
+
+/// 提示区块：红色用于阻断性失败（给出补救入口），橙色用于非阻断提示。
+///
+/// 目的：任何失败都必须「说清原因 + 给出下一步」，不允许出现
+/// 只有转圈或按钮置灰、用户无从判断的状态。
+class MessageBox extends StatelessWidget {
+  const MessageBox({
+    required this.color,
+    required this.icon,
+    required this.message,
+    this.actions = const <Widget>[],
+    super.key,
+  });
+
+  final Color color;
+  final IconData icon;
+  final String message;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(icon, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(message, style: TextStyle(color: color)),
+              ),
+            ],
+          ),
+          if (actions.isNotEmpty)
+            Wrap(
+              spacing: 4,
+              children: actions
+                  .map((Widget w) => Theme(
+                        data: Theme.of(context)
+                            .copyWith(iconButtonTheme: IconButtonThemeData(
+                          style: IconButton.styleFrom(foregroundColor: color),
+                        )),
+                        child: DefaultTextStyle(
+                          style: TextStyle(color: color, fontSize: 13),
+                          child: w,
+                        ),
+                      ))
+                  .toList(),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 /// 围栏可视化：中心为打卡点，外圈为 1000 米围栏，圆点为当前位置。
