@@ -1262,6 +1262,10 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
             enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
             focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
             contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 0)),
+          // 输入即时写回草稿：本页是 PageView 分 part，翻走的 part 会被销毁、
+          // 其 FormField 从 Form 注销，只靠 onSaved 会导致「翻页后再保存，前面 part 填的内容全丢」
+          // （表现为「填了保存不上」）。
+          onChanged: (v) => onSaved(v),
           onSaved: (v) => onSaved(v ?? ''),
         ),
       );
@@ -1622,7 +1626,14 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
   }
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      // 修复前：静默 return，点了保存毫无反应，用户以为「保存不上」。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('有必填项未通过校验，请检查标红的字段'),
+        backgroundColor: Colors.orange));
+      return;
+    }
     _formKey.currentState!.save();
     _syncCbStateToDraft();
     final bool ok = await ref
@@ -2090,6 +2101,10 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
             enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey.shade300)),
             focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Theme.of(context).colorScheme.primary)),
             contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 0)),
+          // 输入即时写回草稿：本页是 PageView 分 part，翻走的 part 会被销毁、
+          // 其 FormField 从 Form 注销，只靠 onSaved 会导致「翻页后再保存，前面 part 填的内容全丢」
+          // （表现为持续评估「保存不上」）。
+          onChanged: (v) => onSaved(v),
           onSaved: (v) => onSaved(v ?? ''),
         ),
       );
@@ -2125,7 +2140,14 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
   );
 
   Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      // 修复前：静默 return，点了保存毫无反应，用户以为「保存不上」。
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('有必填项未通过校验，请检查标红的字段'),
+        backgroundColor: Colors.orange));
+      return;
+    }
     _formKey.currentState!.save();
     _syncCbStateToDraft();
     final seq = int.tryParse(_seqStr);
