@@ -176,6 +176,10 @@ class RehabTemplateDetailScreen extends StatelessWidget {
         ),
       ];
 
+  /// 听障模块：业务已收敛为「首次评估 / 持续评估 / 教学计划（+ 单课教案）」，
+  /// 听能管理入口已下线（后端开关 _hearingMgmtVisible 控制，此处不再暴露）。
+  /// 教学计划与单课教案拆成两张卡片：前者是每两个月更新的 7 项目标，
+  /// 后者是依据教学计划写的每节课详细目标，两者各自保留 AI 生成能力。
   List<_ModuleEntry> _hearingModules() => <_ModuleEntry>[
         const _ModuleEntry(
           icon: Icons.assignment_outlined,
@@ -192,18 +196,18 @@ class RehabTemplateDetailScreen extends StatelessWidget {
           colorKey: 'amber',
         ),
         const _ModuleEntry(
-          icon: Icons.hearing_outlined,
-          title: '听能管理',
-          subtitle: '听力图 / 诊断记录',
-          route: '/rehab/{id}/hearing',
-          colorKey: 'blue',
-        ),
-        const _ModuleEntry(
           icon: Icons.edit_calendar_outlined,
           title: '教学计划',
-          subtitle: '每节课计划 / AI 生成',
+          subtitle: '7 项目标 · 按持续评估更新',
           route: '/rehab/{id}/plan',
           colorKey: 'purple',
+        ),
+        const _ModuleEntry(
+          icon: Icons.menu_book_outlined,
+          title: '单课教案',
+          subtitle: '每节课详细目标 · 依据教学计划',
+          route: '/rehab/{id}/lesson-plan',
+          colorKey: 'blue',
         ),
         const _ModuleEntry(
           icon: Icons.event_note_outlined,

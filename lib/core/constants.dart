@@ -22,6 +22,11 @@ class AppConstants {
   /// 当前为预留接口，AI 能力后续接入 DeepSeek。
   static const String aiLessonPlanPath = '/api/ai/lesson-plan';
 
+  /// 教学计划（7 项目标）AI 接口路径前缀。
+  /// 生成 / 对话式修改都在 oa-ai：配额与模型客户端只有一份，
+  /// 后端会按新生首评或老生最新一期持续评估自动取依据。
+  static const String aiTeachingPlanPath = '/api/ai/teaching-plan';
+
   /// 考勤打卡保存接口路径（预留，后端接入时实现）。
   static const String attendanceClockInPath = '/api/attendance/clock-in';
 

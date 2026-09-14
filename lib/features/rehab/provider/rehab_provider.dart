@@ -64,6 +64,11 @@ class RehabArchiveDetailNotifier
   /// 消费掉一次性成功提示（SnackBar 展示后调用）。
   void clearMessage() => state = state.copyWith(message: null);
 
+  /// 提交首次评估。
+  ///
+  /// 提醒与 AI 生成都由后端负责：后端在保存首评后会创建「1 个月后持续评估」待办，
+  /// 并自动按首评生成第一版教学计划。前端不再自己建任务——那会导致网页端提交评估时
+  /// 完全没有提醒（两端行为不一致）。
   Future<bool> submitFirstEval(RehabFirstEval eval) async {
     try {
       if (eval.id == null) {
@@ -71,18 +76,8 @@ class RehabArchiveDetailNotifier
       } else {
         await _repo.updateFirstEval(eval);
       }
-      // 首次评估提交后，自动创建2个月后的持续评估任务提醒
-      try {
-        final dueDate = DateTime.now().add(const Duration(days: 60));
-        await _repo.createTask(
-          archiveId: eval.archiveId,
-          reminderType: 'CONT_EVAL',
-          title: '${eval.name.isEmpty ? "儿童" : eval.name} · 持续评估（第2次）',
-          dueDate: dueDate,
-        );
-      } catch (_) { /* 任务创建失败不阻塞主流程 */ }
       await reload();
-      state = state.copyWith(message: '首次评估已保存，已创建2月后持续评估任务');
+      state = state.copyWith(message: '首次评估已保存，已排入 1 个月后的持续评估提醒');
       return true;
     } catch (e) {
       state = state.copyWith(error: '保存失败：$e');
@@ -122,36 +117,41 @@ class RehabArchiveDetailNotifier
     }
   }
 
+  /// 按最新评估生成教学计划（新生按首评、老生按最新一期已完成的持续评估）。
+  ///
+  /// 后端返回落库后的完整计划，直接 reload 即可——旧实现生成后又补一次 PUT，
+  /// 多一次请求且容易出现「界面显示的还是旧内容」。
   Future<bool> aiGeneratePlan(String planId) async {
     try {
-      final Map<String, String> gen = await _repo.aiGeneratePlan(planId);
-      if (state.detail != null) {
-        final RehabTeachingPlan? existing = state.detail!.plans
-            .where((p) => p.id == planId)
-            .firstOrNull;
-        if (existing != null) {
-          await _repo.updatePlan(
-            existing.copyWith(
-              hearingGoal: gen['hearingGoal'] ?? '',
-              speechGoal: gen['speechGoal'] ?? '',
-              languageGoal: gen['languageGoal'] ?? '',
-              cognitionGoal: gen['cognitionGoal'] ?? '',
-              communicationGoal: gen['communicationGoal'] ?? '',
-              familyGuidance: gen['familyGuidance'] ?? '',
-              otherGoal: gen['otherGoal'] ?? '',
-              aiGenerated: true,
-            ),
-          );
-        }
-      }
+      await _repo.aiGeneratePlan(planId);
       await reload();
-      state = state.copyWith(message: 'AI 已补全 7 领域目标');
+      state = state.copyWith(message: 'AI 已按最新评估生成 7 项目标');
       return true;
     } catch (e) {
-      state = state.copyWith(error: 'AI 补全失败：$e');
+      // 失败原因后端已写进计划的 aiError，reload 后页面能直接展示
+      await reload();
+      state = state.copyWith(error: 'AI 生成失败：$e');
       return false;
     }
   }
+
+  /// 老师提意见 → 按意见重新生成（只重写涉及到的字段）。
+  Future<bool> revisePlan(String planId, String instruction) async {
+    try {
+      await _repo.revisePlan(planId, instruction);
+      await reload();
+      state = state.copyWith(message: '已按你的意见重新生成');
+      return true;
+    } catch (e) {
+      await reload();
+      state = state.copyWith(error: '重新生成失败：$e');
+      return false;
+    }
+  }
+
+  /// 生成前的额度信息（本月已用 / 剩余 / 本次预估花费）。
+  Future<Map<String, dynamic>> planQuota(String planId) =>
+      _repo.planQuota(planId);
 
   Future<bool> updatePlan(RehabTeachingPlan plan) async {
     try {

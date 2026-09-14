@@ -50,6 +50,7 @@ import 'package:teacher_app/features/games/match_pairs_game.dart';
 import 'package:teacher_app/features/games/sequence_memory_game.dart';
 import 'package:teacher_app/features/rehab/presentation/hearing_section_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/plan_tasks_screens.dart';
+import 'package:teacher_app/features/rehab/presentation/lesson_plan_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/iep_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/add_iep_goal_screen.dart';
 import 'package:teacher_app/features/office/leave_list_screen.dart';
@@ -193,7 +194,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/rehab/:id',
       builder: (BuildContext context, GoRouterState state) =>
-          RehabArchiveDetailScreen(archiveId: state.pathParameters['id'] ?? ''),
+          RehabArchiveDetailScreen(
+        archiveId: state.pathParameters['id'] ?? '',
+        // tab=cont 时直接落在「持续评估」Tab：持续评估页顶部的「历史记录」入口靠它回跳，
+        // 否则会停在默认的「首次评估」Tab，用户还得手动切一次。
+        initialTab: state.uri.queryParameters['tab'],
+      ),
     ),
     GoRoute(
       path: '/rehab/:id/offline-answer',
@@ -466,6 +472,12 @@ final GoRouter appRouter = GoRouter(
       path: '/rehab/:id/plan',
       builder: (BuildContext context, GoRouterState state) =>
           PlanSectionScreen(archiveId: state.pathParameters['id'] ?? ''),
+    ),
+    // 听障档案 - 单课教案独立页（5 领域；与教学计划分开的两个入口）
+    GoRoute(
+      path: '/rehab/:id/lesson-plan',
+      builder: (BuildContext context, GoRouterState state) =>
+          LessonPlanSectionScreen(archiveId: state.pathParameters['id'] ?? ''),
     ),
     // 听障档案 - 评估待办独立页
     GoRoute(

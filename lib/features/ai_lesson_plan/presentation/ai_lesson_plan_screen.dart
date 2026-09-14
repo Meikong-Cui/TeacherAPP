@@ -2,12 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:printing/printing.dart';
-import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/ai_lesson_plan/data/ai_lesson_plan_repository.dart';
 import 'package:teacher_app/features/ai_lesson_plan/provider/ai_lesson_plan_provider.dart';
-import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 import 'package:teacher_app/shared/ui.dart';
 
 /// AI 写教案：儿童上下文表单 + 5 大领域结果（可编辑）+ 1.1.4 PDF 导出 + 回填教学计划。
@@ -76,17 +73,11 @@ class _AiLessonPlanState extends ConsumerState<AiLessonPlanScreen> {
     _editableReady = true;
   }
 
-  Map<String, String> _readContent() {
-    final Map<String, String> out = <String, String>{};
-    for (final (String key, _) in AiLessonPlanResult.orderedDomains) {
-      out[key] = _contentCtl[key]?.text.trim() ?? '';
-    }
-    return out;
-  }
-
   AiLessonPlanRequest _buildRequest() => AiLessonPlanRequest(
         archiveId: widget.launchContext?.archiveId,
         childId: widget.launchContext?.childId,
+        // 显式带上当期教学计划：本课内容必须落到计划定下的阶段目标上。
+        planId: widget.launchContext?.planId,
         childName: _childCtl.text.trim(),
         gender: _gender,
         physiologicalAge: _physCtl.text.trim(),
@@ -145,31 +136,21 @@ class _AiLessonPlanState extends ConsumerState<AiLessonPlanScreen> {
     }
   }
 
-  /// 保存定稿（记录与 AI 的 DIFF），并（若从教学计划进入）回填 5 大目标。
+  /// 保存定稿（记录与 AI 的逐领域 DIFF，用于后续学习教师风格）。
+  ///
+  /// ⚠ 单课教案<b>不回填</b>教学计划：教学计划是「按每期持续评估更新的 7 项目标」，
+  /// 单课教案是「每节课从计划里取目标展开的 5 领域内容」。旧实现把 5 领域直接写回
+  /// 计划的 hearingGoal / speechGoal … 会覆盖掉按评估生成的目标，属于数据破坏。
   Future<void> _saveAndApply() async {
     final AiLessonPlanResult? r = ref.read(aiLessonPlanProvider).result;
     if (r == null) return;
     setState(() => _saving = true);
     try {
       await ref.read(aiLessonPlanProvider.notifier).saveFinal();
-      final AiLessonPlanLaunchContext? ctx = widget.launchContext;
-      if (ctx?.plan != null) {
-        final Map<String, String> content = _readContent();
-        final RehabTeachingPlan updated = ctx!.plan!.copyWith(
-          hearingGoal: content['auditoryDevelopment'],
-          speechGoal: content['speechDevelopment'],
-          languageGoal: content['languageDevelopment'],
-          cognitionGoal: content['cognitiveDevelopment'],
-          communicationGoal: content['communicationSkills'],
-          aiGenerated: true,
-        );
-        await ref.read(rehabRepositoryProvider).updatePlan(updated);
-      }
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(ctx?.plan != null ? '已保存并应用到教学计划' : '已保存定稿（已记录与 AI 的差异）'),
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('已保存定稿（已记录与 AI 的差异）'),
       ));
-      if (ctx?.plan != null && mounted) context.pop();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -213,7 +194,7 @@ class _AiLessonPlanState extends ConsumerState<AiLessonPlanScreen> {
                 Expanded(
                   child: Text(
                     hasPlan
-                        ? '已带入儿童档案信息，生成后可编辑并「应用到教学计划」。'
+                        ? '已带入儿童档案信息与当期教学计划：本课内容会落到计划定下的阶段目标上，生成后可编辑并保存定稿。'
                         : '基于 DeepSeek 生成听能发展→沟通技能 5 大领域教案，可导出 1.1.4 日常教学记录 PDF（符号由课堂填写）。',
                     style: textTheme.bodySmall,
                   ),
@@ -361,7 +342,7 @@ class _AiLessonPlanState extends ConsumerState<AiLessonPlanScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.save_outlined),
-                label: Text(hasPlan ? '保存并应用到教学计划' : '保存定稿'),
+                label: const Text('保存定稿'),
                 onPressed: _saving ? null : () => _saveAndApply(),
               ),
             ),

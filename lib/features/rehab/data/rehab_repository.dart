@@ -96,15 +96,37 @@ class RehabRepository {
         '${AppConstants.rehabPath}/plan/${plan.id}', plan.toJson());
   }
 
-  /// AI 补全教学计划（返回 7 领域目标文本）。
-  Future<Map<String, String>> aiGeneratePlan(String planId) async {
+  /// 按最新评估生成教学计划（新生按首评、老生按最新一期已完成的持续评估）。
+  ///
+  /// 后端返回<b>落库后</b>的完整计划对象，直接用它替换本地状态即可——
+  /// 旧实现是「调完 AI 再补一次 PUT」，既多一次请求，也容易出现「存了但界面还是旧内容」。
+  Future<RehabTeachingPlan> aiGeneratePlan(String planId) async {
     final dynamic data = await apiClient
-        .post('${AppConstants.rehabPath}/plan/$planId/ai-generate');
-    final Map<String, String> out = <String, String>{};
-    if (data is Map) {
-      data.forEach((k, v) => out[k.toString()] = v?.toString() ?? '');
+        .post('${AppConstants.aiTeachingPlanPath}/$planId/generate');
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('教学计划生成响应异常');
     }
-    return out;
+    return RehabTeachingPlan.fromJson(data);
+  }
+
+  /// 老师提意见 → 按意见重新生成（后端只重写涉及到的字段，其余保持不变）。
+  Future<RehabTeachingPlan> revisePlan(String planId, String instruction) async {
+    final dynamic data = await apiClient.post(
+      '${AppConstants.aiTeachingPlanPath}/$planId/revise',
+      <String, dynamic>{'instruction': instruction},
+    );
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('教学计划修改响应异常');
+    }
+    return RehabTeachingPlan.fromJson(data);
+  }
+
+  /// 生成前的额度提示：本月已用 / 剩余 / 不限 / 本次预估花费。
+  Future<Map<String, dynamic>> planQuota(String planId) async {
+    final dynamic data =
+        await apiClient.get('${AppConstants.aiTeachingPlanPath}/$planId/quota');
+    if (data is! Map<String, dynamic>) return const <String, dynamic>{};
+    return data;
   }
 
   /// 删除教学计划。

@@ -6,7 +6,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/ai_lesson_plan/data/ai_lesson_plan_repository.dart';
-import 'package:teacher_app/features/rehab/presentation/hearing_record_tab.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/export_pdf_button.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/hearing_symbol.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
@@ -68,8 +67,11 @@ class _DateFieldState extends State<_DateField> {
 // ════════════════════════════════════════════════════════════════
 
 class RehabArchiveDetailScreen extends ConsumerStatefulWidget {
-  const RehabArchiveDetailScreen({required this.archiveId, super.key});
+  const RehabArchiveDetailScreen({required this.archiveId, this.initialTab, super.key});
   final String archiveId;
+
+  /// 初始 Tab：'first' / 'cont' / 'plan' / 'photo'，为空或未知则落在首个 Tab。
+  final String? initialTab;
 
   @override
   ConsumerState<RehabArchiveDetailScreen> createState() =>
@@ -81,10 +83,28 @@ class _RehabArchiveDetailScreenState
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
+  /// Tab key → index，顺序必须与下面 TabBar 的 tabs 一致。
+  static int _tabIndexOf(String? key) {
+    switch (key) {
+      case 'cont':
+        return 1;
+      case 'plan':
+        return 2;
+      case 'photo':
+        return 3;
+      default:
+        return 0;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(
+      length: 4,
+      vsync: this,
+      initialIndex: _tabIndexOf(widget.initialTab),
+    );
     Future.microtask(
         () => ref.read(rehabArchiveDetailProvider(widget.archiveId).notifier).load(widget.archiveId));
   }
@@ -119,8 +139,10 @@ class _RehabArchiveDetailScreenState
       });
     }
 
-    // 听障档案详情固定为 5 Tab（首次评估 / 持续评估 / 教学计划 / 听能管理 / 手写照片）。
-    // OFFLINE / VB 等孤独症模板已独立到 /rehab-autism/:id，不再在此路由展示。
+    // 听障详情页 4 Tab（首次评估 / 持续评估 / 教学计划 / 手写照片）。
+    // 听能管理已按业务要求隐藏（oa.rehab.hearing-mgmt-visible 默认 false），
+    // 相关页面（HearingRecordTab / HearingSectionScreen）暂时保留代码，
+    // 待业务恢复时把 Tab 与入口加回即可。
     return Scaffold(
       appBar: AppBar(
         title: Text(state.detail?.archive.childName ?? '档案详情'),
@@ -143,7 +165,6 @@ class _RehabArchiveDetailScreenState
             Tab(text: '首次评估'),
             Tab(text: '持续评估'),
             Tab(text: '教学计划'),
-            Tab(text: '听能管理'),
             Tab(text: '手写照片'),
           ],
         ),
@@ -158,7 +179,6 @@ class _RehabArchiveDetailScreenState
                     _FirstEvalTab(archiveId: widget.archiveId),
                     _ContEvalTab(archiveId: widget.archiveId),
                     _PlanTab(archiveId: widget.archiveId),
-                    HearingRecordTab(archiveId: widget.archiveId),
                     _PhotoTab(archiveId: widget.archiveId),
                   ],
                 ),
@@ -974,155 +994,6 @@ class _PhotoTabState extends ConsumerState<_PhotoTab> {
 }
 
 // ════════════════════════════════════════════════════════════════
-//  概览 Tab（保持不变）
-// ════════════════════════════════════════════════════════════════
-
-class _OverviewTab extends ConsumerStatefulWidget {
-  const _OverviewTab({required this.archiveId});
-  final String archiveId;
-  @override
-  ConsumerState<_OverviewTab> createState() => _OverviewTabState();
-}
-
-class _OverviewTabState extends ConsumerState<_OverviewTab> {
-  @override
-  Widget build(BuildContext context) {
-    final state = ref.watch(rehabArchiveDetailProvider(widget.archiveId));
-    final detail = state.detail;
-    if (detail == null) return const Center(child: Text('加载中…'));
-    final archive = detail.archive;
-    final fe = detail.firstEval;
-    final contEvals = detail.contEvals;
-    final plans = detail.plans;
-    final tasks = detail.tasks;
-
-    return ListView(padding: const EdgeInsets.all(16), children: [
-      // ── 儿童基本信息卡 ──
-      _infoCard('儿童信息', Icons.child_care, [
-        _infoRow('姓名', archive.childName),
-        _infoRow('档案编号', archive.archiveNo.isEmpty ? '—' : archive.archiveNo),
-        if (fe != null) ...[
-          _infoRow('性别', fe.gender.isEmpty ? '—' : fe.gender),
-          _infoRow('出生日期', fe.birthDate == null ? '—' : DateFormat('yyyy-MM-dd').format(fe.birthDate!)),
-          _infoRow('民族', fe.ethnicity.isEmpty ? '—' : fe.ethnicity),
-          _infoRow('入园日期', fe.enrollmentDate == null ? '—' : DateFormat('yyyy-MM-dd').format(fe.enrollmentDate!)),
-          _infoRow('班级', fe.className.isEmpty ? '—' : fe.className),
-        ],
-        _infoRow('校区', archive.campusName.isEmpty ? '—' : archive.campusName),
-        _infoRow('状态', archive.status.label),
-      ]),
-
-      // ── 首次评估摘要 ──
-      if (fe != null) _infoCard('首次评估', Icons.assignment,
-        [_infoRow('评估日期', fe.evalDate == null ? '未评估' : DateFormat('yyyy-MM-dd').format(fe.evalDate!)),
-         _infoRow('评估者', fe.evaluatorName.isEmpty ? '—' : fe.evaluatorName),
-         _infoRow('诊断确认日期', fe.diagnosisConfirmDate == null ? '—' : DateFormat('yyyy-MM-dd').format(fe.diagnosisConfirmDate!)),
-         _infoRow('左耳 dB', fe.leftEarDb.isEmpty ? '—' : fe.leftEarDb),
-         _infoRow('右耳 dB', fe.rightEarDb.isEmpty ? '—' : fe.rightEarDb),
-         _infoRow('左补偿方式', fe.leftCompensationType.isEmpty ? '—' : fe.leftCompensationType),
-         _infoRow('右补偿方式', fe.rightCompensationType.isEmpty ? '—' : fe.rightCompensationType),
-         if (fe.briefDesc.isNotEmpty) ...[
-           const SizedBox(height: 4),
-           Text('综合建议: ${fe.briefDesc}', style: const TextStyle(fontSize: 13, color: Colors.black54)),
-         ],
-        ], actionLabel: '编辑', action: () => context.push('/rehab/${widget.archiveId}/first-eval-edit')),
-
-      // ── 持续评估进度 ──
-      _infoCard('持续评估进度', Icons.timeline,
-        contEvals.isEmpty
-          ? [const Padding(padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('暂无持续评估记录', style: TextStyle(color: Colors.black45, fontSize: 13)))]
-          : contEvals.map((c) => ListTile(
-              dense: true, contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(radius: 14,
-                backgroundColor: c.status == ContEvalStatus.done ? Colors.green.shade100
-                  : c.status == ContEvalStatus.overdue ? Colors.red.shade100 : Colors.orange.shade100,
-                child: Text('${c.evalSeq ?? (contEvals.indexOf(c) + 1)}',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
-                      color: c.status == ContEvalStatus.done ? Colors.green.shade800
-                        : c.status == ContEvalStatus.overdue ? Colors.red.shade800 : Colors.orange.shade800))),
-              title: Text(c.evalDate == null ? '未填写' : DateFormat('yyyy-MM-dd').format(c.evalDate!),
-                  style: const TextStyle(fontSize: 13)),
-              subtitle: Text(c.status.label, style: TextStyle(fontSize: 11, color: Colors.black54)),
-              trailing: c.status == ContEvalStatus.done ? const Icon(Icons.check_circle, color: Colors.green, size: 18)
-                : c.status == ContEvalStatus.overdue ? const Icon(Icons.warning, color: Colors.red, size: 18)
-                : const Icon(Icons.pending, color: Colors.orange, size: 18),
-            )).toList(),
-        actionLabel: contEvals.isEmpty ? '开始评估' : '新建',
-        action: () => context.push('/rehab/${widget.archiveId}/cont-eval-edit')),
-
-      // ── 教学计划 ──
-      _infoCard('教学计划', Icons.school,
-        plans.isEmpty
-          ? [const Padding(padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('暂无教学计划', style: TextStyle(color: Colors.black45, fontSize: 13)))]
-          : plans.map((p) => ListTile(
-              dense: true, contentPadding: EdgeInsets.zero,
-              title: Text(p.planPeriodStart == null ? '计划'
-                  : '${DateFormat('yyyy-MM-dd').format(p.planPeriodStart!)} ~ ${p.planPeriodEnd == null ? "" : DateFormat("yyyy-MM-dd").format(p.planPeriodEnd!)}',
-                  style: const TextStyle(fontSize: 13)),
-              subtitle: Text(p.aiGenerated ? 'AI 补全' : '手动创建', style: const TextStyle(fontSize: 11, color: Colors.black54)),
-              trailing: p.aiGenerated ? const Icon(Icons.auto_awesome, size: 16, color: Colors.purple) : null,
-            )).toList(),
-        // 跳转到教学计划独立页（PlanSectionScreen），完整查看各领域目标。
-        actionLabel: '查看计划',
-        action: () => context.push('/rehab/${widget.archiveId}/plan')),
-
-      // ── 任务提醒 ──
-      if (tasks.isNotEmpty) ...[
-        const SizedBox(height: 8),
-        Text('待办任务', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15,
-            color: Theme.of(context).colorScheme.primary)),
-        const SizedBox(height: 6),
-        ...tasks.map((t) => Card(
-          margin: const EdgeInsets.only(bottom: 6),
-          child: ListTile(
-            dense: true,
-            leading: Icon(t.reminderType == 'TEACHING_PLAN' ? Icons.school : Icons.assignment,
-                color: t.completed ? Colors.grey : Theme.of(context).colorScheme.primary),
-            title: Text(t.title, style: TextStyle(
-                fontSize: 13, decoration: t.completed ? TextDecoration.lineThrough : null)),
-            subtitle: Text(DateFormat('yyyy-MM-dd').format(t.dueDate), style: const TextStyle(fontSize: 11)),
-            trailing: t.completed
-                ? const Icon(Icons.check_circle, color: Colors.green, size: 18)
-                : FilledButton.tonal(
-                    onPressed: () => _completeTask(t.id),
-                    child: const Text('完成', style: TextStyle(fontSize: 11)),
-                  ),
-          ),
-        )),
-      ],
-
-      const SizedBox(height: 40),
-    ]);
-  }
-
-  Future<void> _completeTask(String taskId) async {
-    await ref.read(rehabArchiveDetailProvider(widget.archiveId).notifier).completeTask(taskId);
-  }
-
-  /// 信息卡片。
-  Widget _infoCard(String title, IconData icon, List<Widget> children,
-      {String? actionLabel, VoidCallback? action}) => Card(
-    margin: const EdgeInsets.only(bottom: 12),
-    child: Padding(padding: const EdgeInsets.all(12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Row(children: [
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
-          const SizedBox(width: 6),
-          Text(title, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
-              color: Theme.of(context).colorScheme.primary)),
-        ]),
-        if (actionLabel != null && action != null)
-          TextButton(onPressed: action, child: Text(actionLabel, style: const TextStyle(fontSize: 12))),
-      ]),
-      const SizedBox(height: 8),
-      ...children,
-    ])),
-  );
-}
-
-// ════════════════════════════════════════════════════════════════
 //  首次评估 — 独立编辑页面（全屏 Scaffold，禁止左右滑动切 tab）
 // ════════════════════════════════════════════════════════════════
 
@@ -1901,6 +1772,62 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
 //  持续评估 — 独立编辑页面（全屏 Scaffold）
 // ════════════════════════════════════════════════════════════════
 
+/// 持续评估页顶部的「历史记录」入口。
+///
+/// 老师从儿童中枢页的「持续评估」卡片进来时直接是填写新表，之前表现是看不到历史、
+/// 也无从修改以前的记录（历史只在「档案详情 → 持续评估 Tab」里）。这里给出明确入口，
+/// 点进去落在档案详情页的「持续评估」Tab——那里是完整历史，可查看、导出 PDF、逐条编辑。
+class _ContEvalHistoryBanner extends ConsumerWidget {
+  const _ContEvalHistoryBanner({required this.archiveId});
+  final String archiveId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final List<RehabContEval> list =
+        ref.watch(rehabArchiveDetailProvider(archiveId)).detail?.contEvals ??
+            const <RehabContEval>[];
+    // 还没填过就没有历史可看，不占位置。
+    if (list.isEmpty) return const SizedBox.shrink();
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final TextTheme text = Theme.of(context).textTheme;
+    final int done =
+        list.where((RehabContEval e) => e.status == ContEvalStatus.done).length;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Material(
+        color: colors.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => context.push('/rehab/$archiveId?tab=cont'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(children: <Widget>[
+              Icon(Icons.history, size: 20, color: colors.onPrimaryContainer),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text('历史持续评估（${list.length} 次）',
+                          style: text.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: colors.onPrimaryContainer)),
+                      const SizedBox(height: 2),
+                      Text('已完成 $done 次 · 点这里查看或修改以前的记录',
+                          style: text.bodySmall
+                              ?.copyWith(color: colors.onPrimaryContainer)),
+                    ]),
+              ),
+              Icon(Icons.chevron_right, color: colors.onPrimaryContainer),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class ContEvalEditScreen extends ConsumerStatefulWidget {
   const ContEvalEditScreen({required this.archiveId, this.evalId, super.key});
   final String archiveId;
@@ -2154,6 +2081,9 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title:Text(_isEditing?'编辑持续评估（第${_seqStr.isEmpty?"?":_seqStr}次）':'新建持续评估'),leading:IconButton(icon:const Icon(Icons.arrow_back),onPressed:()=>context.pop())),
     body:Form(key:_formKey,child:Column(children:[
+      // 新建时给一个通往「历史持续评估」的入口：老师从中枢页「持续评估」卡片进来是直接填新表，
+      // 看不到以前填过什么、也改不了。编辑模式下当前这条就是历史记录，不再重复提示。
+      if (!_isEditing) _ContEvalHistoryBanner(archiveId: widget.archiveId),
       Expanded(child:PageView(controller:_pageController,physics:const NeverScrollableScrollPhysics(),
         children:[_buildPart1Basic(),_buildPart2Eval(),_buildPart3Advice()])),
       SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(16,0,16,8),

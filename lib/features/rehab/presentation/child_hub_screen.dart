@@ -83,6 +83,13 @@ class ChildHubScreen extends ConsumerWidget {
         ),
         title: Text(archive.childName.isEmpty ? '儿童档案' : archive.childName),
         actions: <Widget>[
+          // 档案总览：/rehab/:id 详情页（含官方表单整档导出）。
+          // 没有这个入口它就成了取不到的孤儿页，整档 PDF 导出也就没地方点了。
+          IconButton(
+            icon: const Icon(Icons.folder_open_outlined),
+            tooltip: '档案总览与整档导出',
+            onPressed: () => context.push('/rehab/$archiveId'),
+          ),
           IconButton(
             icon: const Icon(Icons.edit_outlined),
             tooltip: '编辑儿童信息',
@@ -159,6 +166,15 @@ class ChildHubScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 16),
 
+          // 听障三步流程引导：先让老师看清「现在该做哪一步」，再进功能入口。
+          if (!isAutism) ...<Widget>[
+            _HearingFlowGuide(
+              archiveId: archiveId,
+              detail: rehabState.detail!,
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // 功能入口（按类型分支）— 已提到评估历史之上。
           AppSectionTitle('功能入口'),
           GridView.count(
@@ -215,6 +231,12 @@ class ChildHubScreen extends ConsumerWidget {
                         onDone: () => ref
                             .read(rehabArchiveDetailProvider(archiveId).notifier)
                             .completeTask(t.id),
+                        // 点卡片直达该做的事：教学计划提醒 → 计划页；其余 → 持续评估页。
+                        onOpen: () => context.push(
+                          t.reminderType == 'TEACHING_PLAN'
+                              ? '/rehab/$archiveId/plan'
+                              : '/rehab/$archiveId/cont-eval-edit',
+                        ),
                       ))
                   .toList(),
             ),
@@ -243,11 +265,13 @@ class ChildHubScreen extends ConsumerWidget {
       for (final p in rehab.plans) {
         final DateTime? d = p.planPeriodStart;
         items.add(_PlanItem(
-          title: p.aiGenerated ? 'AI 生成 · 教学计划' : '教学计划',
-          subtitle: _periodText(p.planPeriodStart, p.planPeriodEnd),
+          title: p.aiGenerated ? 'AI 教学计划（7 项目标）' : '教学计划',
+          subtitle: '${_periodText(p.planPeriodStart, p.planPeriodEnd)}'
+              '${p.aiSourceLabel.isEmpty ? '' : ' · ${p.aiSourceLabel}'}',
           date: d,
           upcoming: d == null || d.isAfter(now.subtract(const Duration(days: 1))),
-          route: '/rehab/${rehab.archive.id}',
+          // 点开直接进教学计划页（7 项目标 + 与 AI 对话修改），不再落到档案详情。
+          route: '/rehab/${rehab.archive.id}/plan',
         ));
       }
     } else if (autism != null) {
@@ -290,43 +314,80 @@ class ChildHubScreen extends ConsumerWidget {
   }
 
   List<_HubEntry> _entries(bool isAutism, String id) {
-    // 通用模板入口：残联标准模板（所有类型均展示）；线下模板 / VB 仅孤独症。
-    final List<_HubEntry> base = <_HubEntry>[
-      const _HubEntry(
-        icon: Icons.folder_special_outlined,
-        title: '残联标准模板',
-        subtitle: '月计划 / IEP / 评估等标准模块',
-        route: '/children/{id}/template?autism={autism}',
-        colorKey: 'teal',
-      ),
-    ];
-    if (isAutism) {
-      base.addAll(<_HubEntry>[
-        const _HubEntry(
-          icon: Icons.offline_bolt_outlined,
-          title: 'C-PEP3',
-          subtitle: 'OFFLINE A/B 卷评估',
-          route: '/rehab-autism/{id}/offline-home',
-          colorKey: 'rose',
-        ),
-        const _HubEntry(
-          icon: Icons.child_care_outlined,
-          title: 'PEP-3',
-          subtitle: '填各领域预估年龄 → 直接出报告',
-          route: '/rehab-autism/{id}/pep3-home',
-          colorKey: 'indigo',
-        ),
-        const _HubEntry(
-          icon: Icons.record_voice_over_outlined,
-          title: 'VB',
-          subtitle: 'VB 教师 / 家长卷',
-          route: '/rehab-autism/{id}/vb-home',
-          colorKey: 'purple',
-        ),
-      ]);
-    }
-    return base
-        .map((e) => _HubEntry(
+    // 听障主线已收敛为「首次评估 → 持续评估 → 教学计划 → 单课教案」四项，
+    // 听能管理入口下线；残联标准模板保留（承载手写板汇总与全部模块下钻，避免孤儿页）。
+    // 孤独症保持原样（残联标准模板 + OFFLINE / PEP-3 / VB）。
+    final List<_HubEntry> raw = isAutism
+        ? <_HubEntry>[
+            const _HubEntry(
+              icon: Icons.folder_special_outlined,
+              title: '残联标准模板',
+              subtitle: '月计划 / IEP / 评估等标准模块',
+              route: '/children/{id}/template?autism={autism}',
+              colorKey: 'teal',
+            ),
+            const _HubEntry(
+              icon: Icons.offline_bolt_outlined,
+              title: 'C-PEP3',
+              subtitle: 'OFFLINE A/B 卷评估',
+              route: '/rehab-autism/{id}/offline-home',
+              colorKey: 'rose',
+            ),
+            const _HubEntry(
+              icon: Icons.child_care_outlined,
+              title: 'PEP-3',
+              subtitle: '填各领域预估年龄 → 直接出报告',
+              route: '/rehab-autism/{id}/pep3-home',
+              colorKey: 'indigo',
+            ),
+            const _HubEntry(
+              icon: Icons.record_voice_over_outlined,
+              title: 'VB',
+              subtitle: 'VB 教师 / 家长卷',
+              route: '/rehab-autism/{id}/vb-home',
+              colorKey: 'purple',
+            ),
+          ]
+        : <_HubEntry>[
+            const _HubEntry(
+              icon: Icons.assignment_outlined,
+              title: '首次评估',
+              subtitle: '听障儿童评估表',
+              route: '/rehab/{id}/first-eval-edit',
+              colorKey: 'teal',
+            ),
+            const _HubEntry(
+              icon: Icons.assessment_outlined,
+              title: '持续评估',
+              subtitle: '每 2 个月一次',
+              route: '/rehab/{id}/cont-eval-edit',
+              colorKey: 'amber',
+            ),
+            const _HubEntry(
+              icon: Icons.edit_calendar_outlined,
+              title: '教学计划',
+              subtitle: '7 项目标 · AI 生成 + 对话修改',
+              route: '/rehab/{id}/plan',
+              colorKey: 'purple',
+            ),
+            const _HubEntry(
+              icon: Icons.menu_book_outlined,
+              title: '单课教案',
+              subtitle: '5 领域 · 依据教学计划',
+              route: '/rehab/{id}/lesson-plan',
+              colorKey: 'blue',
+            ),
+            const _HubEntry(
+              icon: Icons.folder_special_outlined,
+              title: '残联标准模板',
+              subtitle: '全部模块 + 手写板汇总',
+              route: '/children/{id}/template?autism={autism}',
+              colorKey: 'green',
+            ),
+          ];
+
+    return raw
+        .map((_HubEntry e) => _HubEntry(
               icon: e.icon,
               title: e.title,
               subtitle: e.subtitle,
@@ -495,9 +556,10 @@ class _HubEntryCard extends StatelessWidget {
 }
 
 class _TaskCard extends StatelessWidget {
-  const _TaskCard({required this.task, required this.onDone});
+  const _TaskCard({required this.task, required this.onDone, this.onOpen});
   final RehabTask task;
   final VoidCallback onDone;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -506,6 +568,7 @@ class _TaskCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 10),
       child: ListTile(
+        onTap: onOpen,
         leading: CircleAvatar(
           backgroundColor: colors.primaryContainer,
           foregroundColor: colors.onPrimaryContainer,
@@ -521,6 +584,216 @@ class _TaskCard extends StatelessWidget {
         trailing: TextButton(
           onPressed: onDone,
           child: const Text('完成'),
+        ),
+      ),
+    );
+  }
+}
+
+/// 听障业务流程的一步（用于 [_HearingFlowGuide]）。
+class _FlowStep {
+  const _FlowStep({
+    required this.index,
+    required this.title,
+    required this.desc,
+    required this.done,
+    required this.route,
+  });
+
+  final int index;
+  final String title;
+  final String desc;
+  final bool done;
+  final String route;
+}
+
+/// 听障三步流程引导卡：① 首次评估 → ② 持续评估 → ③ 教学计划。
+///
+/// 目的：老师打开儿童档案时立刻知道「现在该做哪一步」，而不是在功能入口里猜。
+/// 每步可点直达对应页面；第一个未完成的步骤高亮为「当前该做」。
+/// 老生允许跳过首次评估，不会因为首评为空就把第①步标成红色待办。
+class _HearingFlowGuide extends StatelessWidget {
+  const _HearingFlowGuide({required this.archiveId, required this.detail});
+  final String archiveId;
+  final RehabArchiveDetail detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    final DateFormat fmt = DateFormat('yyyy-MM-dd');
+
+    final bool hasFirst = detail.hasFirstEval;
+    final bool oldStudent = !detail.archive.isNewStudent;
+    final int contDone = detail.completedContEvalCount;
+    final RehabTask? openTask = detail.openContEvalTask;
+    final RehabTeachingPlan? plan = detail.latestPlan;
+
+    final List<_FlowStep> steps = <_FlowStep>[
+      _FlowStep(
+        index: 1,
+        title: '首次评估',
+        desc: hasFirst
+            ? '已完成，可随时修改'
+            : (oldStudent ? '老生可跳过，直接填持续评估' : '先完成，AI 之后才有生成依据'),
+        done: hasFirst,
+        route: '/rehab/$archiveId/first-eval-edit',
+      ),
+      _FlowStep(
+        index: 2,
+        title: '持续评估',
+        desc: contDone == 0 && openTask == null
+            ? '每 2 个月填一次'
+            : '${contDone > 0 ? '已完成 $contDone 期' : '待填写'}'
+                '${openTask == null ? '' : ' · 下次 ${fmt.format(openTask.dueDate)}'}',
+        done: contDone > 0 && openTask == null,
+        route: '/rehab/$archiveId/cont-eval-edit',
+      ),
+      _FlowStep(
+        index: 3,
+        title: '教学计划',
+        desc: plan == null
+            ? '按最新评估 AI 生成 7 项目标'
+            : '${plan.aiGenerated ? 'AI 已生成' : '已创建'} · ${plan.aiSourceLabel}',
+        done: plan != null && plan.hasAnyGoal,
+        route: '/rehab/$archiveId/plan',
+      ),
+    ];
+    // 第一个未完成的步骤即「当前该做」；三步都完成时高亮最后一步（教学计划）。
+    final int found = steps.indexWhere((_FlowStep s) => !s.done);
+    final int currentIndex = found < 0 ? steps.length - 1 : found;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(Icons.route_outlined, color: colors.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('听障康复流程',
+                      style: textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: colors.primaryContainer,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    oldStudent ? '老生' : '新生',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: colors.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            for (int i = 0; i < steps.length; i++)
+              _FlowStepRow(step: steps[i], current: i == currentIndex),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FlowStepRow extends StatelessWidget {
+  const _FlowStepRow({required this.step, required this.current});
+  final _FlowStep step;
+  final bool current;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme colors = Theme.of(context).colorScheme;
+    const Color doneColor = Color(0xFF0EA5A4);
+    final Color circleColor =
+        step.done ? doneColor : (current ? colors.primary : colors.outline);
+    return InkWell(
+      onTap: () => context.push(step.route),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: current ? colors.primary : colors.outlineVariant,
+            width: current ? 1.6 : 1,
+          ),
+          color: current
+              ? colors.primaryContainer.withValues(alpha: 0.45)
+              : null,
+        ),
+        child: Row(
+          children: <Widget>[
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: circleColor,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: step.done
+                  ? const Icon(Icons.check, size: 15, color: Colors.white)
+                  : Text(
+                      '${step.index}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700),
+                    ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Text(step.title,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 14)),
+                      if (current) ...<Widget>[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            '当前该做',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    step.desc,
+                    style: TextStyle(
+                        fontSize: 12, color: colors.onSurfaceVariant),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, size: 18),
+          ],
         ),
       ),
     );

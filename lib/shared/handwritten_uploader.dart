@@ -8,7 +8,6 @@ import 'package:teacher_app/core/api_client.dart';
 import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
-import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 /// 残联标准模板各部分「上传手写板」可复用组件。
 ///

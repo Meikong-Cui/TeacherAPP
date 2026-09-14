@@ -24,6 +24,18 @@ class AiLessonPlanRepository {
     return AiLessonPlanResult.fromJson(data as Map<String, dynamic>);
   }
 
+  /// 某档案下的全部单课教案（倒序）。单课教案页用它渲染历史列表。
+  /// 后端 GET /api/ai/lesson-plan?archiveId=
+  Future<List<AiLessonPlanResult>> listByArchive(int archiveId) async {
+    final dynamic data =
+        await apiClient.get('${AppConstants.aiLessonPlanPath}?archiveId=$archiveId');
+    if (data is! List) return const <AiLessonPlanResult>[];
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map((e) => AiLessonPlanResult.fromJson(e))
+        .toList();
+  }
+
   /// 下载已生成教案的 PDF 字节（1.1.4 格式，含中文）。
   Future<Uint8List> downloadPdf(int id) async {
     final Uri uri =
@@ -54,6 +66,7 @@ class AiLessonPlanRequest {
     this.archiveId,
     this.childId,
     this.iepGoalId,
+    this.planId,
     required this.childName,
     required this.gender,
     required this.physiologicalAge,
@@ -67,6 +80,11 @@ class AiLessonPlanRequest {
   final int? archiveId;
   final int? childId;
   final int? iepGoalId;
+
+  /// 本课教案所服务的教学计划 id。传了就按它取计划目标注入 prompt；
+  /// 不传则后端回退到该档案最近一版教学计划。
+  final int? planId;
+
   final String childName;
   final String gender;
   final String physiologicalAge;
@@ -80,6 +98,7 @@ class AiLessonPlanRequest {
         if (archiveId != null) 'archiveId': archiveId,
         if (childId != null) 'childId': childId,
         if (iepGoalId != null) 'iepGoalId': iepGoalId,
+        if (planId != null) 'planId': planId,
         'childName': childName,
         'gender': gender,
         'physiologicalAge': physiologicalAge,
@@ -117,6 +136,8 @@ class AiLessonPlanResult {
   const AiLessonPlanResult({
     required this.id,
     this.status = 0,
+    this.planId,
+    this.createTime,
     required this.childName,
     required this.gender,
     required this.physiologicalAge,
@@ -129,6 +150,13 @@ class AiLessonPlanResult {
 
   final int id;
   final int status;
+
+  /// 本课教案服务的教学计划 id（可能为空：档案下还没有教学计划）。
+  final int? planId;
+
+  /// 生成时间，列表按此倒序展示。
+  final DateTime? createTime;
+
   final String childName;
   final String gender;
   final String physiologicalAge;
@@ -172,6 +200,8 @@ class AiLessonPlanResult {
     return AiLessonPlanResult(
       id: (json['id'] as int?) ?? 0,
       status: (json['status'] as int?) ?? 0,
+      planId: (json['planId'] as num?)?.toInt(),
+      createTime: DateTime.tryParse(json['createTime']?.toString() ?? ''),
       childName: (json['childName'] as String?) ?? '',
       gender: (json['gender'] as String?) ?? '',
       physiologicalAge: (json['physiologicalAge'] as String?) ?? '',
@@ -205,4 +235,8 @@ class AiLessonPlanLaunchContext {
   final String hearingAge;
   final String deviceWear;
   final RehabTeachingPlan? plan;
+
+  /// 当期教学计划 id（后端 plan_id 为数值型；计划 id 在 DTO 里是字符串）。
+  /// 传空表示没有指定计划，由后端回退到该档案最近一版计划。
+  int? get planId => int.tryParse(plan?.id ?? '');
 }

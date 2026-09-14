@@ -107,17 +107,7 @@ class _ChildTimelineState extends ConsumerState<ChildTimeline> {
           tone: AppPalette.warning,
         ));
       }
-      for (final RehabHearingRecord h in widget.rehab.hearingRecords) {
-        events.add(_TimelineEvent(
-          date: h.evalDate ?? h.fillDate,
-          title: '听能管理记录',
-          subtitle: h.evaluatorName == null || h.evaluatorName!.isEmpty
-              ? '听力测试'
-              : '听力师：${h.evaluatorName}',
-          icon: Icons.hearing_outlined,
-          tone: AppPalette.purple,
-        ));
-      }
+      // 听能管理记录暂不在时间线展示（该模块已按业务要求隐藏，详见详情页 Tab 说明）。
       for (final RehabTeachingPlan p in widget.rehab.plans) {
         events.add(_TimelineEvent(
           date: p.planPeriodStart ?? p.planPeriodEnd,

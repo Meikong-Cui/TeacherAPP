@@ -33,6 +33,9 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
   String _templateType = 'HEARING'; // HEARING / AUTISM
   /// 孤独症档案的评测量表：STANDARD（残联标准）/ OFFLINE（线下模板）/ VB，三套相互独立。
   String _evalFormCode = 'STANDARD';
+  /// 听障业务的新生/老生标记：新生需先做首次评估，老生可直接填持续评估。
+  /// 唯一真相在后端 rehab_child.student_type，这里只在建档时写入初值。
+  String _studentType = 'NEW'; // NEW / OLD
   bool _submitting = false;
 
   @override
@@ -86,6 +89,9 @@ class _AddChildScreenState extends ConsumerState<AddChildScreen> {
         campusName: '',
         // 听障档案不使用孤独症量表，统一回落 STANDARD 由后端忽略。
         evalFormCode: _templateType == 'AUTISM' ? _evalFormCode : 'STANDARD',
+        // 新生=需先做首次评估（完成后自动排 1 个月后的持续评估提醒）；
+        // 老生=可不做首评，建档即排一条「今天」的持续评估待填提醒。
+        studentType: _templateType == 'AUTISM' ? 'NEW' : _studentType,
       );
       final String id =
           await ref.read(rehabRepositoryProvider).createArchive(archive);
@@ -278,7 +284,8 @@ Expanded(
                         child: _TypeChoice(
                           selected: _templateType == 'HEARING',
                           title: '听障',
-                          desc: '听能管理 / 听觉语言评估',
+                          // 听障业务已收敛为三项：首次评估 / 持续评估 / 教学计划。
+                          desc: '首次评估 / 持续评估 / 教学计划',
                           icon: Icons.hearing_outlined,
                           color: iconColor('green'),
                           onTap: () => setState(() => _templateType = 'HEARING'),
@@ -297,6 +304,45 @@ Expanded(
                       ),
                     ],
                   ),
+                  // 听障专属：新生/老生决定后续流程起点（首评 → 持续评估 → 教学计划）。
+                  if (_templateType == 'HEARING') ...<Widget>[
+                    const SizedBox(height: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 16),
+                    Text(
+                      '学生类型',
+                      style: textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '新生：先做首次评估，完成后自动排 1 个月后的持续评估提醒'
+                      '（此后每 2 个月一次）。\n'
+                      '老生：可直接填写持续评估，建档后即可开始。',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SegmentedButton<String>(
+                      expandedInsets: EdgeInsets.zero,
+                      segments: const <ButtonSegment<String>>[
+                        ButtonSegment<String>(
+                          value: 'NEW',
+                          label: Text('新生'),
+                          icon: Icon(Icons.fiber_new_outlined),
+                        ),
+                        ButtonSegment<String>(
+                          value: 'OLD',
+                          label: Text('老生'),
+                          icon: Icon(Icons.person_outline),
+                        ),
+                      ],
+                      selected: <String>{_studentType},
+                      onSelectionChanged: (Set<String> s) =>
+                          setState(() => _studentType = s.first),
+                    ),
+                  ],
                   if (_templateType == 'AUTISM') ...<Widget>[
                     const SizedBox(height: 20),
                     const Divider(height: 1),

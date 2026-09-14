@@ -94,6 +94,7 @@ class RehabArchive {
     this.createTime,
     this.templateType = '',
     this.evalFormCode = 'STANDARD',
+    this.studentType = 'NEW',
   });
 
   final String id;
@@ -107,6 +108,13 @@ class RehabArchive {
   final String templateType;
   /// 孤独症档案默认评测量表代码：STANDARD（残联标准）/ OFFLINE / VB。
   final String evalFormCode;
+
+  /// 新生 NEW / 老生 OLD。决定是否必须做首次评估与持续评估提醒的起始节奏。
+  /// 唯一真相在后端 rehab_child，档案详情接口会回填该值。
+  final String studentType;
+
+  /// 是否为新生（需先完成首次评估）。
+  bool get isNewStudent => studentType.toUpperCase() != 'OLD';
 
   /// 是否为孤独症档案（决定详情页走孤独症模板）。
   bool get isAutism => templateType.toUpperCase() == 'AUTISM';
@@ -125,6 +133,7 @@ class RehabArchive {
         createTime: _dt(j['createTime']),
         templateType: (j['templateType'] as String?) ?? '',
         evalFormCode: (j['evalFormCode'] as String?) ?? 'STANDARD',
+        studentType: (j['studentType'] as String?) ?? 'NEW',
       );
 
   /// 序列化（创建/更新档案用）。id 为空时不带上，由后端生成。
@@ -135,6 +144,7 @@ class RehabArchive {
         'campusName': campusName,
         'status': status.code,
         'templateType': templateType,
+        'studentType': studentType,
         if (evalFormCode.isNotEmpty) 'evalFormCode': evalFormCode,
         if (remark != null) 'remark': remark,
       };
@@ -977,6 +987,11 @@ class RehabTeachingPlan {
     this.otherGoal = '',
     this.teacherName = '',
     this.status = 0,
+    this.contEvalId,
+    this.aiSource,
+    this.aiStatus,
+    this.aiError,
+    this.aiRevisionLog,
   });
 
   final String? id;
@@ -994,6 +1009,75 @@ class RehabTeachingPlan {
   final String teacherName;
   final int status;
 
+  /// 本版计划依据的持续评估 ID（由首次评估生成时为 null）。
+  final String? contEvalId;
+
+  /// AI 依据来源：FIRST_EVAL / CONT_EVAL / MANUAL。
+  final String? aiSource;
+
+  /// AI 状态：0 未生成 1 生成中 2 已完成 3 失败。
+  final int? aiStatus;
+
+  /// AI 失败原因（非空时页面提示可重新生成）。
+  final String? aiError;
+
+  /// 老师提意见的轮次记录（JSON 字符串，[{"round","instruction","at","goals","costYuan"}]）。
+  final String? aiRevisionLog;
+
+  /// 依据来源的中文说明，用于卡片上标注「按哪一期评估生成」。
+  String get aiSourceLabel {
+    switch (aiSource) {
+      case 'FIRST_EVAL':
+        return '依据首次评估';
+      case 'CONT_EVAL':
+        return '依据最新一期持续评估';
+      default:
+        return aiGenerated ? 'AI 生成' : '手动填写';
+    }
+  }
+
+  /// 是否正在生成中（页面据此显示 loading，而不是空白）。
+  bool get aiRunning => aiStatus == 1;
+
+  /// 是否 AI 生成失败（页面据此给出「重新生成」入口）。
+  bool get aiFailed => aiStatus == 3;
+
+  /// 7 项目标的（标签, 内容）列表，顺序与后端 GOAL_FIELDS 完全一致。
+  ///
+  /// 页面按此渲染即可，不必各自硬编码字段名——计划页、时间线、单课教案页
+  /// 三处展示同一批字段，任何一处漏项都会让「7 项目标」名不副实。
+  List<(String, String)> get goalEntries => <(String, String)>[
+        ('听能目标', hearingGoal),
+        ('言语目标', speechGoal),
+        ('语言目标', languageGoal),
+        ('认知目标', cognitionGoal),
+        ('沟通目标', communicationGoal),
+        ('家庭指导', familyGuidance),
+        ('其它目标与注意事项', otherGoal),
+      ];
+
+  /// 是否已填过任何一项目标（判断「空白计划」，用于提示先让 AI 生成）。
+  bool get hasAnyGoal => goalEntries.any((e) => e.$2.trim().isNotEmpty);
+
+  /// AI 修订轮次记录。
+  ///
+  /// 后端 aiRevisionLog 是 JSON 数组字符串：`[{round, instruction, at, costYuan}, ...]`。
+  /// 解析失败返回空列表而不是抛异常——历史脏数据不该让整个计划页崩掉。
+  List<PlanRevisionEntry> get revisions {
+    final String? raw = aiRevisionLog;
+    if (raw == null || raw.trim().isEmpty) return const <PlanRevisionEntry>[];
+    try {
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is! List) return const <PlanRevisionEntry>[];
+      return decoded
+          .whereType<Map<String, dynamic>>()
+          .map(PlanRevisionEntry.fromJson)
+          .toList();
+    } catch (_) {
+      return const <PlanRevisionEntry>[];
+    }
+  }
+
   factory RehabTeachingPlan.fromJson(Map<String, dynamic> j) => RehabTeachingPlan(
         id: j['id']?.toString(),
         archiveId: j['archiveId']?.toString() ?? '',
@@ -1009,6 +1093,11 @@ class RehabTeachingPlan {
         otherGoal: (j['otherGoal'] as String?) ?? '',
         teacherName: (j['teacherName'] as String?) ?? '',
         status: j['status'] as int? ?? 0,
+        contEvalId: j['contEvalId']?.toString(),
+        aiSource: j['aiSource'] as String?,
+        aiStatus: j['aiStatus'] as int?,
+        aiError: j['aiError'] as String?,
+        aiRevisionLog: j['aiRevisionLog'] as String?,
       );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1054,7 +1143,43 @@ class RehabTeachingPlan {
         otherGoal: otherGoal ?? this.otherGoal,
         teacherName: teacherName ?? this.teacherName,
         status: status,
+        contEvalId: contEvalId,
+        aiSource: aiSource,
+        aiStatus: aiStatus,
+        aiError: aiError,
+        aiRevisionLog: aiRevisionLog,
       );
+}
+
+/// 教学计划的一轮 AI 修订记录（对应后端 aiRevisionLog 数组中的一项）。
+///
+/// 老师每提一次意见重新生成就会追加一轮，页面据此让老师回看「改过什么、什么时候改的」。
+class PlanRevisionEntry {
+  const PlanRevisionEntry({
+    required this.round,
+    required this.instruction,
+    this.at,
+    this.costYuan = 0,
+  });
+
+  final int round;
+  final String instruction;
+  final DateTime? at;
+  final double costYuan;
+
+  factory PlanRevisionEntry.fromJson(Map<String, dynamic> j) => PlanRevisionEntry(
+        round: (j['round'] as num?)?.toInt() ?? 0,
+        instruction: (j['instruction'] as String?) ?? '',
+        at: _dt(j['at']),
+        costYuan: (j['costYuan'] as num?)?.toDouble() ?? 0,
+      );
+
+  /// 形如 2026-09-14 15:30；时间缺失时返回空串。
+  String get timeLabel {
+    if (at == null) return '';
+    String p(int n) => n.toString().padLeft(2, '0');
+    return '${at!.year}-${p(at!.month)}-${p(at!.day)} ${p(at!.hour)}:${p(at!.minute)}';
+  }
 }
 
 /// 手写照片附件。
@@ -1428,6 +1553,7 @@ class RehabArchiveDetail {
     this.hearingRecords = const <RehabHearingRecord>[],
     this.photos = const <RehabPhoto>[],
     this.tasks = const <RehabTask>[],
+    this.hearingMgmtVisible = false,
   });
 
   final RehabArchive archive;
@@ -1437,6 +1563,47 @@ class RehabArchiveDetail {
   final List<RehabHearingRecord> hearingRecords;
   final List<RehabPhoto> photos;
   final List<RehabTask> tasks;
+
+  /// 听能管理是否可见。听障业务已收敛为「首次评估 / 持续评估 / 教学计划」三项，
+  /// 由后端开关（oa.rehab.hearing-mgmt-visible）统一控制，前端不再各自判断。
+  final bool hearingMgmtVisible;
+
+  /// 最近一版教学计划（按周期起始倒序）。页面「当前计划」取它。
+  RehabTeachingPlan? get latestPlan {
+    if (plans.isEmpty) return null;
+    final List<RehabTeachingPlan> sorted = List<RehabTeachingPlan>.of(plans);
+    sorted.sort((RehabTeachingPlan a, RehabTeachingPlan b) {
+      final DateTime da = a.planPeriodStart ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final DateTime db = b.planPeriodStart ?? DateTime.fromMillisecondsSinceEpoch(0);
+      return db.compareTo(da);
+    });
+    return sorted.first;
+  }
+
+  /// 已提交的首评（有即视为「首次评估」这一步已完成）。
+  bool get hasFirstEval => firstEval != null;
+
+  /// 未完成的持续评估提醒（三步流程卡「② 持续评估」当前该做的那一条）。
+  RehabTask? get openContEvalTask {
+    for (final RehabTask t in tasks) {
+      if (t.reminderType == 'CONT_EVAL' && !t.completed) return t;
+    }
+    return null;
+  }
+
+  /// 已完成的持续评估期数。
+  int get completedContEvalCount =>
+      contEvals.where((RehabContEval e) => e.status == 1).length;
+
+  /// 最近一期已完成的持续评估（AI 生成教学计划的依据）。
+  RehabContEval? get latestCompletedContEval {
+    RehabContEval? best;
+    for (final RehabContEval e in contEvals) {
+      if (e.status != 1) continue;
+      if (best == null || (e.evalSeq ?? 0) > (best.evalSeq ?? 0)) best = e;
+    }
+    return best;
+  }
 
   factory RehabArchiveDetail.fromJson(Map<String, dynamic> j) {
     final dynamic fe = j['firstEval'];
@@ -1470,6 +1637,7 @@ class RehabArchiveDetail {
           .whereType<Map<String, dynamic>>()
           .map((e) => RehabTask.fromJson(e))
           .toList(),
+      hearingMgmtVisible: j['hearingMgmtVisible'] as bool? ?? false,
     );
   }
 }
