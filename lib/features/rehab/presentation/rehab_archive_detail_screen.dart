@@ -1426,6 +1426,39 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
   Widget _aidedThresholdGrid() {
     const freqs = ['250Hz', '500Hz', '1kHz', '2kHz', '3kHz', '4kHz'];
     final at = _draft.aidedThresholds ?? <String, dynamic>{};
+    // ✅ 修复：这些格子原本只有 onSaved 空函数、没有 onChanged，且本页是
+    // PageView 分 part，翻走该 part 时格子被销毁——保存时值根本没写回 _draft，
+    // 老师填的助听听阈「保存不上」。改为 onChanged 即时写回
+    // _draft.aidedThresholds[ear][freq]。
+    void setAided(String ear, String freq, String v) {
+      final next = Map<String, dynamic>.from(_draft.aidedThresholds ?? {});
+      final earMap = Map<String, dynamic>.from((next[ear] as Map?) ?? {});
+      final val = v.trim();
+      if (val.isEmpty) {
+        earMap.remove(freq);
+      } else {
+        earMap[freq] = val;
+      }
+      next[ear] = earMap;
+      setState(() => _draft = _draft.copyWith(aidedThresholds: next));
+    }
+
+    Widget cell(String ear, String f) => Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: TextFormField(
+              initialValue: jsonStr(at, [ear, f]),
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                border: UnderlineInputBorder(),
+                contentPadding: EdgeInsets.symmetric(vertical: 8),
+              ),
+              onChanged: (v) => setAided(ear, f, v),
+            ),
+          ),
+        );
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('助听听阈', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
       const SizedBox(height: 6),
@@ -1435,21 +1468,11 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
       ]),
       Row(children: [
         const SizedBox(width: 50, child: Text('左耳 dB(HL)', style: const TextStyle(fontSize: 12))),
-        ...freqs.map((f) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: TextFormField(initialValue: jsonStr(at, ['left', f]),
-            textAlign: TextAlign.center, keyboardType: TextInputType.number,
-            decoration: const InputDecoration(border: UnderlineInputBorder(), contentPadding: EdgeInsets.symmetric(vertical: 8)),
-            onSaved: (v) { /* handled in save */ }),
-        ))),
+        ...freqs.map((f) => cell('left', f)),
       ]),
       Row(children: [
         const SizedBox(width: 50, child: Text('右耳 dB(HL)', style: const TextStyle(fontSize: 12))),
-        ...freqs.map((f) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: TextFormField(initialValue: jsonStr(at, ['right', f]),
-            textAlign: TextAlign.center, keyboardType: TextInputType.number,
-            decoration: const InputDecoration(border: UnderlineInputBorder(), contentPadding: EdgeInsets.symmetric(vertical: 8)),
-            onSaved: (v) { /* handled in save */ }),
-        ))),
+        ...freqs.map((f) => cell('right', f)),
       ]),
     ]);
   }
