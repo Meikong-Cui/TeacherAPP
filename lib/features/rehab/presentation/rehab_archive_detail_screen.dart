@@ -10,6 +10,7 @@ import 'package:teacher_app/features/rehab/presentation/widgets/export_pdf_butto
 import 'package:teacher_app/features/rehab/presentation/widgets/hearing_symbol.dart';
 import 'package:teacher_app/features/rehab/data/cont_eval_catalog.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/cont_eval_catalog_form.dart';
+import 'package:teacher_app/features/rehab/presentation/widgets/part_nav_bar.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 // ════════════════════════════════════════════════════════════════
@@ -1035,6 +1036,14 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
   late RehabFirstEval _draft;
   late final PageController _pageController;
 
+  /// 当前停留在第几部分（0 基）。PageView 禁用了手势滑动，翻页只能靠底部翻页条，
+  /// 这个变量只是为了让翻页条知道当前在哪一部分（决定按钮是否可点、文案是什么）。
+  int _pageIdx = 0;
+
+  /// 三个部分的名字，用于「下一部分：xxx →」文案；顺序必须与 build 里
+  /// PageView 的 children 一一对应。
+  static const List<String> _partNames = <String>['基本资料', '评估内容', '综合建议'];
+
   /// Checkbox 选中状态：fieldKey → 已选选项集合。
   /// 修复原版 _cbRow onChanged 为空操作导致无法选中的 bug。
   final Map<String, Set<String>> _cbState = <String, Set<String>>{};
@@ -1071,6 +1080,14 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  /// 翻到第 i 部分。先 setState 让翻页条立刻反映目标状态，再动画滚过去
+  /// （PageView.onPageChanged 随后会把同一个值再设一次，幂等）。
+  void _goPage(int i) {
+    setState(() => _pageIdx = i);
+    _pageController.animateToPage(i,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
   void _loadDraft() {
@@ -1588,23 +1605,6 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     );
   }
 
-  Widget _partNav({int? prevPage, int? nextPage, String? nextLabel}) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          if (prevPage != null)
-            TextButton.icon(onPressed: () => _pageController.animateToPage(prevPage,
-                duration: const Duration(milliseconds: 300), curve: Curves.easeInOut),
-              icon: const Icon(Icons.arrow_back, size: 16), label: const Text('上一部分'))
-          else const SizedBox(width: 80),
-          if (nextPage != null)
-            FilledButton.tonal(onPressed: () => _pageController.animateToPage(nextPage,
-                duration: const Duration(milliseconds: 300), curve: Curves.easeInOut),
-              child: Text(nextLabel ?? '下一部分 →'))
-          else const SizedBox(width: 80),
-        ]),
-      );
-
   // ── 将 _cbState 回写到 draft 的 domain map（保存前调用）──
   void _syncCbStateToDraft() {
     void syncTo(Map<String, dynamic>? domain) {
@@ -1635,14 +1635,30 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
       body: Form(key: _formKey, child: Column(children: [
         Expanded(child: PageView(controller: _pageController,
           physics: const NeverScrollableScrollPhysics(),
+          onPageChanged: (int i) => setState(() => _pageIdx = i),
           children: [
             _buildPart1Basic(),
             _buildPart2Eval(),
             _buildPart3Advice(),
           ])),
         SafeArea(child: Padding(padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: FilledButton.icon(onPressed: _save,
-            icon: const Icon(Icons.save, size: 18), label: const Text('保存首次评估')),
+          child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+            // 翻页条**钉在底部**、不随内容滚动：原来它挂在每部分 ListView 的
+            // 第一个子项（即内容顶部），「评估内容」一页几十个字段，滑到底就得
+            // 滚回顶部才能翻页 —— 用户直接卡住。
+            PartNavBar(
+              index: _pageIdx,
+              count: _partNames.length,
+              onPrev: _pageIdx > 0 ? () => _goPage(_pageIdx - 1) : null,
+              onNext: _pageIdx < _partNames.length - 1
+                  ? () => _goPage(_pageIdx + 1) : null,
+              nextLabel: _pageIdx < _partNames.length - 1
+                  ? '下一部分：${_partNames[_pageIdx + 1]} →' : null,
+            ),
+            const SizedBox(height: 8),
+            FilledButton.icon(onPressed: _save,
+              icon: const Icon(Icons.save, size: 18), label: const Text('保存首次评估')),
+          ]),
         )),
       ])),
     );
@@ -1677,7 +1693,6 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
 
   // ═══ Part 1 — 基本资料 ═══
   Widget _buildPart1Basic() => ListView(padding: const EdgeInsets.all(16), children: [
-    _partNav(nextPage: 1, nextLabel: '下一部分：评估内容 →'),
     _sectionTitle('一、基本情况'),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(flex: 2, child: _tf('姓名', _draft.name, (v) => _draft = _draft.copyWith(name: v))),
@@ -1763,7 +1778,6 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
 
   // ═══ Part 2 — 评估内容（从原 _FirstEvalTabState 复制，checkbox 用修复版）═══
   Widget _buildPart2Eval() => ListView(padding: const EdgeInsets.all(16), children: [
-    _partNav(prevPage: 0, nextPage: 2, nextLabel: '下一部分：综合建议 →'),
     _sectionTitle('听能管理'),
     _cbRow('确定家长了解保养及检查助听设备程序', ['是', '否'], _draft.domainHearingMgmt, 'deviceCareProgram'),
     _cbRow('除睡觉及洗澡、游泳外是否都给儿童配戴助听设备', ['是', '否'], _draft.domainHearingMgmt, 'alwaysWear'),
@@ -1918,7 +1932,6 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
 
   // ═══ Part 3 — 综合建议 ═══
   Widget _buildPart3Advice() => ListView(padding: const EdgeInsets.all(16), children: [
-    _partNav(prevPage: 1),
     _sectionTitle('综合建议'),
     _tf('综合建议', _draft.briefDesc, (v) => _draft = _draft.copyWith(
           comprehensiveAdvice: {...?_draft.comprehensiveAdvice, 'briefDesc': v}), maxLines: 5),
@@ -2162,32 +2175,11 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
             contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 0)),
           items: opts.map((o) => DropdownMenuItem<String>(value: o, child: Text(o, style: const TextStyle(fontSize: 14)))).toList(),
           onChanged: o));
-  /// 上一部分 / 下一部分导航。纸表 1.1.2 共 7 页，加上「基本资料」与「总结」共 9 部分。
-  Widget _partNav(int idx) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 10),
-    decoration: BoxDecoration(
-        color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
-    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: <Widget>[
-      if (idx > 0)
-        TextButton.icon(
-          onPressed: () => _goPage(idx - 1),
-          icon: const Icon(Icons.arrow_back, size: 16),
-          label: const Text('上一部分'),
-        )
-      else
-        const SizedBox(width: 80),
-      Text('${idx + 1} / $_partCount',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-      if (idx < _partCount - 1)
-        FilledButton.tonal(
-          onPressed: () => _goPage(idx + 1),
-          child: Text(idx == _partCount - 2 ? '下一部分：总结 →' : '下一部分 →'),
-        )
-      else
-        const SizedBox(width: 80),
-    ]),
-  );
-
+  /// 翻到第 i 部分。
+  ///
+  /// 注意：翻页条本身已换成共用的 [PartNavBar]（放在底部、不随内容滚动），
+  /// 原来这里的 `_partNav(int idx)` 只挂在「基本资料」和「总结」两页上，
+  /// 中间 7 个目录页**一个翻页入口都没有** —— 老师填完第 1 页就卡死出不去。
   void _goPage(int i) {
     setState(() => _pageIdx = i);
     _pageController.animateToPage(i,
@@ -2245,11 +2237,24 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: FilledButton.icon(
-                onPressed: _save,
-                icon: const Icon(Icons.save, size: 18),
-                label: const Text('保存持续评估'),
-              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: <Widget>[
+                // 翻页条钉在底部（纸表 7 页每页都是长列表，放在内容开头等于没有）。
+                PartNavBar(
+                  index: _pageIdx,
+                  count: _partCount,
+                  onPrev: _pageIdx > 0 ? () => _goPage(_pageIdx - 1) : null,
+                  onNext: _pageIdx < _partCount - 1
+                      ? () => _goPage(_pageIdx + 1) : null,
+                  nextLabel: _pageIdx == _partCount - 2
+                      ? '下一部分：总结 →' : '下一部分 →',
+                ),
+                const SizedBox(height: 8),
+                FilledButton.icon(
+                  onPressed: _save,
+                  icon: const Icon(Icons.save, size: 18),
+                  label: const Text('保存持续评估'),
+                ),
+              ]),
             ),
           ),
         ]),
@@ -2297,7 +2302,6 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
       if (fe.rightCompensationType.isNotEmpty) comp.add('右：${fe.rightCompensationType}');
     }
     return ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), children: [
-      _partNav(0),
       _sectionTitle('基本资料'),
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Expanded(flex: 2, child: _tf('姓名', a?.childName ?? '', (v) {})),
@@ -2332,7 +2336,6 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
 
   // ═══ 最后一部分：总结（教师评语 / 家长表现备注）═══
   Widget _buildSummaryPage() => ListView(padding: const EdgeInsets.all(16), children: [
-    _partNav(_partCount - 1),
     _sectionTitle('总结'),
     _tf('教师评语', _draft.teacherNotes,
         (v) => _draft = _draft.copyWith(teacherNotes: v), maxLines: 4),
