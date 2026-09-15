@@ -8,6 +8,8 @@ import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/ai_lesson_plan/data/ai_lesson_plan_repository.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/export_pdf_button.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/hearing_symbol.dart';
+import 'package:teacher_app/features/rehab/data/cont_eval_catalog.dart';
+import 'package:teacher_app/features/rehab/presentation/widgets/cont_eval_catalog_form.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
 
 // ════════════════════════════════════════════════════════════════
@@ -361,14 +363,18 @@ class _ReadOnlyView extends ConsumerWidget {
         _ro('开始康复年龄', fe.rehabStartAge),
         _ro('既往康复经历', fe.pastRehabExp),
 
+        // 纸表「家庭资料」列序：姓名 / 民族 / 身份证号 / 受教育程度 / 职业 / 联系方式
+        // （没有「年龄」列；旧读法一直在显示空的 age，且漏了身份证号）
         _sect(ctx, '四、家庭资料'),
         _sub('父亲'),
-        _ro('姓名', fe.father('name')), _ro('年龄', fe.father('age')),
-        _ro('民族', fe.father('ethnicity')), _ro('文化程度', fe.father('education')),
+        _ro('姓名', fe.father('name')), _ro('民族', fe.father('ethnicity')),
+        _ro('身份证号', fe.father('idNumber')),
+        _ro('受教育程度', fe.father('education')),
         _ro('职业', fe.father('occupation')), _ro('联系方式', fe.father('contact')),
         _sub('母亲'),
-        _ro('姓名', fe.mother('name')), _ro('年龄', fe.mother('age')),
-        _ro('民族', fe.mother('ethnicity')), _ro('文化程度', fe.mother('education')),
+        _ro('姓名', fe.mother('name')), _ro('民族', fe.mother('ethnicity')),
+        _ro('身份证号', fe.mother('idNumber')),
+        _ro('受教育程度', fe.mother('education')),
         _ro('职业', fe.mother('occupation')), _ro('联系方式', fe.mother('contact')),
         _sub('家庭情况'),
         _ro('家庭状况', fe.familyStatus),
@@ -385,13 +391,14 @@ class _ReadOnlyView extends ConsumerWidget {
 
   Widget _roPart2(BuildContext ctx) {
     final hm = fe.domainHearingMgmt;
-    final ha = fe.domainHearingAbility;
     final lg = fe.domainLanguage;
     final sp = fe.domainSpeech;
     final cg = fe.domainCognition;
     final cm = fe.domainCommunication;
     final bh = fe.behaviorNote;
     final pt = fe.parentTrainingNote;
+    // 注：听觉能力各题的「真相域」是 domainHearingMgmt（见下方注释），
+    // 所以这里不再取 domainHearingAbility，避免有人误用那个空域。
     return ListView(padding: const EdgeInsets.all(16), children: [
       _sect(ctx, '听能管理'),
       _q(hm, '家长了解助听设备保养及检查程序', 'deviceCareProgram'),
@@ -401,22 +408,33 @@ class _ReadOnlyView extends ConsumerWidget {
       _q(hm, '已有助听设备保养工具', 'careTools'),
       _q(hm, '配戴后对声音反应的改变', 'reactionChange'),
 
+      // ⚠ 听觉能力这几项在**编辑页**写的是 domainHearingMgmt（不是 domainHearingAbility），
+      //   键名也没有 Sound / 六音的英文后缀。只读页原来按 domainHearingAbility +
+      //   envSoundReaction / nameCallReaction / lingSixReaction 读，永远读到空——
+      //   典型的「只读页怎么读」与「编辑页怎么写」脱钩。
+      //   这里统一到编辑页的契约（也是导出 HearingExportService 认的契约）。
       _sect(ctx, '听觉能力'),
-      _q(ha, '对环境声音的反应', 'envSoundReaction'),
-      _q(ha, '对语音的反应', 'voiceReaction'),
-      _q(ha, '对名字/家人称谓的反应', 'nameCallReaction'),
-      _q(ha, '对林氏六音的反应', 'lingSixReaction'),
-      _ro('听觉记忆（项）', fe.d('hearingAbility', 'auditoryMemory.count')),
-      _ro('听觉描述阶段', fe.d('hearingAbility', 'auditoryDesc.stages')),
-      _ro('言语识别平均得分', fe.d('hearingAbility', 'evalScore')),
-      _ro('CAP 听觉行为分级', fe.d('hearingAbility', 'capLevel')),
+      _q(hm, '对环境声音的反应', 'envReaction'),
+      _q(hm, '对语音的反应', 'voiceReaction'),
+      _q(hm, '对名字/家人称谓的反应', 'nameReaction'),
+      _q(hm, '对林氏六音的反应（纸表无此栏）', 'lingReaction'),
+      _ro('听觉记忆（项）', _v(hm, 'auditoryMemCount')),
+      _ro('听觉记忆组合类型', _v(hm, 'auditoryMemType')),
+      _ro('听觉描述·闭合式阶段', _v(hm, 'auditoryDescClosed')),
+      _ro('听觉描述·开放式阶段', _v(hm, 'auditoryDescOpen')),
+      _ro('言语识别平均得分', _v(hm, 'speechIdentifyScore')),
+      _ro('CAP 听觉行为分级', _v(hm, 'capLevel')),
 
       _sect(ctx, '语言能力'),
       _q(lg, '沟通模式', 'commMode'),
       _q(lg, '理解性语言程度', 'understandingLevel'),
       _q(lg, '表达性语言程度', 'expressingNone'),
-      _ro('模仿复述', fe.d('language', 'expressImitate')),
-      _ro('主动表达', fe.d('language', 'expressActive')),
+      _q(lg, '模仿复述', 'expressingImitate'),
+      _ro('模仿复述·句子长度', _v(lg, 'imitateLength')),
+      _ro('模仿复述·例如', _v(lg, 'imitateExample')),
+      _q(lg, '主动表达', 'expressingActive'),
+      _ro('主动表达·句子长度', _v(lg, 'activeLength')),
+      _ro('主动表达·例如', _v(lg, 'activeExample')),
       _sub('表征性语言发展阶段'),
       _q(lg, '咿呀期（简发音）', 'stageBabbling'),
       _q(lg, '儿语期（连续音节）', 'stageCooing'),
@@ -428,13 +446,15 @@ class _ReadOnlyView extends ConsumerWidget {
       _sub('问句能力'),
       _q(lg, '理解并回答问句', 'questionUnderstand'),
       _q(lg, '会表达问句', 'questionExpress'),
-      _ro('平均语言年龄水平', fe.d('language', 'evalScore')),
-      _ro('SIR 言语可懂度分级', fe.d('language', 'sirLevel')),
+      _ro('问句能力说明', _v(lg, 'questionNote')),
+      _ro('平均语言年龄水平', _v(lg, 'avgLanguageAge')),
+      _ro('SIR 言语可懂度分级', _v(lg, 'sirLevel')),
 
       _sect(ctx, '言语能力'),
       _q(sp, '能否发出声音', 'canVoice'),
       _q(sp, '超音段', 'supraSegmental'),
-      _ro('模仿发音', fe.d('speech', 'imitationNote')),
+      _q(sp, '模仿发音', 'imitationFlag'),
+      _ro('模仿发音说明', _v(sp, 'imitationNote')),
 
       _sect(ctx, '认知能力'),
       for (final f in const ['分类', '配对', '颜色', '形状', '质感', '数学概念', '排序'])
@@ -451,6 +471,12 @@ class _ReadOnlyView extends ConsumerWidget {
       _q(cm, '主动互动', 'activeInteraction'),
       _q(cm, '维持话题', 'maintainTopic'),
       _q(cm, '开启话题', 'openTopic'),
+      // 说明项：对应纸表「□无 □有 ______」下划线上那一段（导出端会叠上去）
+      _q(cm, '眼神交流说明', 'eyeContactNote'),
+      _q(cm, '主动提问说明', 'activeQuestionNote'),
+      _q(cm, '主动互动说明', 'activeInteractionNote'),
+      _q(cm, '维持话题说明', 'maintainTopicNote'),
+      _q(cm, '其他表达需求方式', 'expressModeOther'),
 
       _sect(ctx, '行为表现'),
       _q(bh, '好奇心', 'curiosity'),
@@ -1016,10 +1042,18 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
   static const List<String> _genders = ['男', '女'];
   static const List<String> _compTypes = ['助听器', '人工耳蜗', '无'];
   static const List<String> _stimStrategies = ['单侧', '双侧同步', '双侧顺次'];
+  /// 助听听阈：key 用纯数字（与后端 HearingExportService.aidedVal 的 String.valueOf 一致），
+  /// label 写表头；_aidedLegacyKeys 是旧版 App 写入的键，读取时回退兼容，避免历史数据读不出。
+  static const List<String> _aidedKeys = ['250', '500', '1000', '2000', '3000', '4000'];
+  static const List<String> _aidedLabels = ['250Hz', '500Hz', '1kHz', '2kHz', '3kHz', '4kHz'];
+  static const List<String> _aidedLegacyKeys = ['250Hz', '500Hz', '1kHz', '2kHz', '3kHz', '4kHz'];
   static const List<String> _commModes = ['口语', '手势', '手语', 'PECS', '混合'];
   // 注：家庭状况已改为 _familyStatusCb() 的 5 个 □（双亲/单亲/父/母/双亡），
   // 不再是下拉；老数据「单亲-父 / 单亲-母」由 _splitFamily 兼容。
-  static const List<String> _inputLangTypes = ['手语', '口语-方言', '口语-普通话'];
+  // 纸表「家庭主要输入语言类型」是**并列的 4 个方框**：手语 / 口语 / 方言 / 普通话
+  // （口语与方言、普通话可同时勾）。旧值是合并项「口语-方言 / 口语-普通话」，
+  // 一个下拉只能选一个 → 既对不上纸表的框，也无法表达「口语 + 普通话」。
+  static const List<String> _inputLangTypes = ['手语', '口语', '方言', '普通话'];
   static const List<String> _awarenessLevels = ['高', '中', '低'];
   static const List<String> _coopLevels = ['好', '一般', '差'];
   static const List<String> _eduLevels = ['文盲', '小学', '初中', '高中/中专', '大专', '本科', '硕士及以上'];
@@ -1194,6 +1228,49 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
       );
     }
 
+  /// 通用「一行多选 □」控件（纸表上就是并列的几个方框）：值以顿号连接存储。
+  /// family_status / family_input_lang_type 这类多选都复用它。
+  Widget _multiCb(String label, List<String> opts, String value,
+      void Function(String) onChanged) {
+    final Set<String> cur = value
+        .split(RegExp(r'[、,，]'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+        const SizedBox(height: 2),
+        Wrap(spacing: 12, children: opts.map((o) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(width: 18, height: 18,
+              child: Checkbox(
+                value: cur.contains(o),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                onChanged: (c) {
+                  final Set<String> s = Set<String>.from(cur);
+                  if (c == true) {
+                    s.add(o);
+                  } else {
+                    s.remove(o);
+                  }
+                  setState(() => onChanged(s.join('、')));
+                },
+              )),
+            Text(o, style: const TextStyle(fontSize: 13)),
+          ],
+        )).toList()),
+      ]),
+    );
+  }
+
+  /// 家庭主要输入语言类型（手语 / 口语 / 方言 / 普通话，可多选）。
+  Widget _inputLangCb() => _multiCb('家庭主要输入语言类型', _inputLangTypes,
+      _draft.familyInputLangType,
+      (v) => _draft = _draft.copyWith(familyInputLangType: v));
+
   /// 家庭状况：5 个 □ 可多选，多选以顿号连接存进 `family_status`。
   ///
   /// 老数据（'双亲' / '单亲-父' 等）依然能正确回显：下方 `_splitFamily` 会
@@ -1247,6 +1324,49 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     return out;
   }
 
+  /// 首次评估通用「往某个 JSON 域里写一个文字 key」的输入框。
+  /// 认知/听觉能力/语言能力等领域的补充说明项都走它，省得每加一项都手写一遍
+  /// `<String, dynamic>{...?_draft.xxx, key: v}` 的展开。
+  Widget _domainText(String label, String key,
+      {Map<String, dynamic>? Function()? get, void Function(Map<String, dynamic>)? set,
+       int maxLines = 1, String hint = ''}) {
+    final Map<String, dynamic>? cur = get != null ? get() : _draft.domainHearingMgmt;
+    return _tf(
+      hint.isEmpty ? label : '$label（$hint）',
+      (cur?[key] ?? '').toString(),
+      (v) {
+        final Map<String, dynamic> nm = <String, dynamic>{...?cur, key: v};
+        setState(() => set != null ? set(nm)
+            : _draft = _draft.copyWith(domainHearingMgmt: nm));
+      },
+      maxLines: maxLines,
+    );
+  }
+
+  /// 听能管理/听觉能力的文字填空（careTools、reactionChange、听觉记忆…）→ domainHearingMgmt。
+  Widget _hm(String label, String key, {int maxLines = 1, String hint = ''}) =>
+      _domainText(label, key, maxLines: maxLines, hint: hint);
+
+  /// 语言能力的文字填空（模仿复述长度与例句、平均语言年龄水平、SIR…）→ domainLanguage。
+  Widget _lang(String label, String key, {int maxLines = 1, String hint = ''}) =>
+      _domainText(label, key,
+          get: () => _draft.domainLanguage,
+          set: (m) => _draft = _draft.copyWith(domainLanguage: m),
+          maxLines: maxLines, hint: hint);
+
+  /// 沟通能力的说明填空（眼神交流/主动提问/主动互动/维持话题/其他表达方式…）→ domainCommunication。
+  ///
+  /// 纸表这几行是「□无 □有 ______」，导出端 HearingExportService 会把
+  /// `*Note` / `expressModeOther` 叠到下划线上。网页端一直有这些输入框，
+  /// App 端此前**没有** —— 老师用 App 就填不了，PDF 上自然一直空着。
+  ///
+  /// ⚠「开启话题」纸表**没有**说明横线，openTopicNote 不导出（保留作内部备注）。
+  Widget _cm(String label, String key, {int maxLines = 1, String hint = ''}) =>
+      _domainText(label, key,
+          get: () => _draft.domainCommunication,
+          set: (m) => _draft = _draft.copyWith(domainCommunication: m),
+          maxLines: maxLines, hint: hint);
+
   /// 认知能力填空：写入 `domainCognition[key]`。
   ///
   /// key 用的是中文（'分类'/'配对'/…），与只读页 `_roPart2` 里
@@ -1295,7 +1415,10 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
   }
 
   Widget _aidedThresholdGrid() {
-    const freqs = ['250Hz', '500Hz', '1kHz', '2kHz', '3kHz', '4kHz'];
+    // ⚠ 频点 key 用**纯数字**（'250'/'1000'…）：后端 HearingExportService.aidedVal
+    //   用 String.valueOf(freq) 取键。早期这里写的是 '250Hz'/'1kHz' 形态，
+    //   于是 App 填的助听听阈在导出 PDF 里**读不到**（网页端写的是纯数字，一直正常）。
+    //   保存一律写数字键；读取按索引回退兼容旧键，避免历史数据丢失。
     final at = _draft.aidedThresholds ?? <String, dynamic>{};
     // ✅ 修复：这些格子原本只有 onSaved 空函数、没有 onChanged，且本页是
     // PageView 分 part，翻走该 part 时格子被销毁——保存时值根本没写回 _draft，
@@ -1314,36 +1437,42 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
       setState(() => _draft = _draft.copyWith(aidedThresholds: next));
     }
 
-    Widget cell(String ear, String f) => Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: TextFormField(
-              initialValue: jsonStr(at, [ear, f]),
-              textAlign: TextAlign.center,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                border: UnderlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(vertical: 8),
-              ),
-              onChanged: (v) => setAided(ear, f, v),
+    Widget cell(String ear, int i) {
+      final earMap = (at[ear] as Map?) ?? const <String, dynamic>{};
+      final init = (earMap[_aidedKeys[i]] ?? earMap[_aidedLegacyKeys[i]] ?? '').toString();
+      return Expanded(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: TextFormField(
+            initialValue: init,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              border: UnderlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(vertical: 8),
             ),
+            onChanged: (v) => setAided(ear, _aidedKeys[i], v),
           ),
-        );
+        ),
+      );
+    }
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const Text('助听听阈', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
       const SizedBox(height: 6),
       Row(children: [
         const SizedBox(width: 50, child: Text('')),
-        ...freqs.map((f) => Expanded(child: Center(child: Text(f, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600))))),
+        for (int i = 0; i < _aidedKeys.length; i++)
+          Expanded(child: Center(child: Text(_aidedLabels[i],
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)))),
       ]),
       Row(children: [
         const SizedBox(width: 50, child: Text('左耳 dB(HL)', style: const TextStyle(fontSize: 12))),
-        ...freqs.map((f) => cell('left', f)),
+        for (int i = 0; i < _aidedKeys.length; i++) cell('left', i),
       ]),
       Row(children: [
         const SizedBox(width: 50, child: Text('右耳 dB(HL)', style: const TextStyle(fontSize: 12))),
-        ...freqs.map((f) => cell('right', f)),
+        for (int i = 0; i < _aidedKeys.length; i++) cell('right', i),
       ]),
     ]);
   }
@@ -1586,15 +1715,17 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     ]),
     _aidedThresholdGrid(),
     _dd('听觉刺激策略', _draft.hearingStimStrategy, (v) => _draft = _draft.copyWith(hearingStimStrategy: v ?? ''), _stimStrategies),
-    _sectionTitle('三、家庭情况'),
+    _sectionTitle('三、家庭资料'),
     _sub('父亲'),
+    // 纸表家庭资料列：姓名 / 民族 / 身份证号 / 受教育程度 / 职业 / 联系方式
+    // （原「年龄」不在纸表上，已移除；历史 JSON 里残留的 age 键不显示也不清除）
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(child: _tf('姓名', _parent('father', 'name'), (v) => _setParent('father', 'name', v))),
-      Expanded(child: _tf('年龄', _parent('father', 'age'), (v) => _setParent('father', 'age', v))),
+      Expanded(child: _tf('民族', _parent('father', 'ethnicity'), (v) => _setParent('father', 'ethnicity', v))),
     ]),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: _tf('民族', _parent('father', 'ethnicity'), (v) => _setParent('father', 'ethnicity', v))),
-      Expanded(child: _dd('文化程度', _parent('father', 'education'), (v) => _setParent('father', 'education', v ?? ''), _eduLevels)),
+      Expanded(child: _tf('身份证号', _parent('father', 'idNumber'), (v) => _setParent('father', 'idNumber', v))),
+      Expanded(child: _dd('受教育程度', _parent('father', 'education'), (v) => _setParent('father', 'education', v ?? ''), _eduLevels)),
     ]),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(child: _tf('职业', _parent('father', 'occupation'), (v) => _setParent('father', 'occupation', v))),
@@ -1603,11 +1734,11 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     _sub('母亲'),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(child: _tf('姓名', _parent('mother', 'name'), (v) => _setParent('mother', 'name', v))),
-      Expanded(child: _tf('年龄', _parent('mother', 'age'), (v) => _setParent('mother', 'age', v))),
+      Expanded(child: _tf('民族', _parent('mother', 'ethnicity'), (v) => _setParent('mother', 'ethnicity', v))),
     ]),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Expanded(child: _tf('民族', _parent('mother', 'ethnicity'), (v) => _setParent('mother', 'ethnicity', v))),
-      Expanded(child: _dd('文化程度', _parent('mother', 'education'), (v) => _setParent('mother', 'education', v ?? ''), _eduLevels)),
+      Expanded(child: _tf('身份证号', _parent('mother', 'idNumber'), (v) => _setParent('mother', 'idNumber', v))),
+      Expanded(child: _dd('受教育程度', _parent('mother', 'education'), (v) => _setParent('mother', 'education', v ?? ''), _eduLevels)),
     ]),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Expanded(child: _tf('职业', _parent('mother', 'occupation'), (v) => _setParent('mother', 'occupation', v))),
@@ -1617,7 +1748,7 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     // 纸表 1.1.1 上「家庭状况」是 5 个 □（可多选，如「单亲 + 父」＝单亲随父），
     // 不是下拉单选。仍存 family_status 一列，多选以顿号连接。
     _familyStatusCb(),
-    _dd('主要输入语言类型', _draft.familyInputLangType, (v) => _draft = _draft.copyWith(familyInputLangType: v ?? ''), _inputLangTypes),
+    _inputLangCb(),
     _dd('家庭语言环境', _draft.familyLangEnv, (v) => _draft = _draft.copyWith(familyLangEnv: v ?? ''), _familyLangEnvs),
     _dd('主要照顾者', _draft.caregiver, (v) => _draft = _draft.copyWith(caregiver: v ?? ''), _caregivers),
     Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1625,14 +1756,9 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
       Expanded(child: _tf('照顾者联系方式', _draft.caregiverContact, (v) => _draft = _draft.copyWith(caregiverContact: v))),
     ]),
     _tf('现居住地址', _draft.homeAddress, (v) => _draft = _draft.copyWith(homeAddress: v), maxLines: 2),
-    _sub('家长意识与配合'),
-    _dd('康复意识', _draft.familyAwareness, (v) => _draft = _draft.copyWith(familyAwareness: v ?? ''), _awarenessLevels),
-    _dd('配合程度', _draft.familyCooperation, (v) => _draft = _draft.copyWith(familyCooperation: v ?? ''), _coopLevels),
-    // comprehensiveAdvice 是 JSON Map；此处编辑其 briefDesc 分量
-    _tf('综合建议', _draft.briefDesc, (v) => _draft = _draft.copyWith(
-          comprehensiveAdvice: {...?_draft.comprehensiveAdvice, 'briefDesc': v}), maxLines: 3),
-    _tf('评估者姓名', _draft.evaluatorName, (v) => _draft = _draft.copyWith(evaluatorName: v)),
-    _df('评估日期', _draft.evalDate, (v) => _draft = _draft.copyWith(evalDate: v)),
+    // 纸表「家庭资料」到「现居住地家庭地址」为止。原先挂在这里的
+    // 综合建议 / 评估者姓名 / 评估日期与 Part 3 重复，已移除；
+    // 「康复意识 / 配合程度」属家长受训范畴，已并入 Part 2 的家长受训领域。
   ]);
 
   // ═══ Part 2 — 评估内容（从原 _FirstEvalTabState 复制，checkbox 用修复版）═══
@@ -1643,17 +1769,30 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     _cbRow('除睡觉及洗澡、游泳外是否都给儿童配戴助听设备', ['是', '否'], _draft.domainHearingMgmt, 'alwaysWear'),
     _cbRow('家中听觉环境', ['安静', '有噪音'], _draft.domainHearingMgmt, 'homeEnv'),
     _cbRow('幼儿的听觉习惯', ['完全聆听', '依赖视觉', '两者都有'], _draft.domainHearingMgmt, 'hearingHabit'),
-    const Text('已有助听设备保养工具', style: TextStyle(fontSize: 13, color: Colors.black54)),
-    const SizedBox(height: 12),
-    const Text('配戴助听设备后幼儿对声音的反应有何改变？', style: TextStyle(fontSize: 13)),
+    // 纸表第 1 页「听能管理」最后两行是**填空**，原先只放了两个静态 Text 标题，
+    // 没有输入框 → domainHearingMgmt 里永远没有 careTools / reactionChange，
+    // 导出 PDF 也就无从落笔。补成真正的输入项。
+    _hm('已有助听设备保养工具', 'careTools'),
+    _hm('配戴助听设备后幼儿对声音的反应有何改变？', 'reactionChange', maxLines: 2),
     _sectionTitle('听觉能力'),
     const Text('环境声音反应', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _cbRow('幼儿对环境声音的反应', ['无反应', '察觉', '辨识'], _draft.domainHearingMgmt, 'envReaction'),
     _cbRow('幼儿对语音的反应', ['无反应', '察觉', '辨识'], _draft.domainHearingMgmt, 'voiceReaction'),
     _cbRow('幼儿对名字、家人称谓的反应', ['无反应', '察觉', '辨识'], _draft.domainHearingMgmt, 'nameReaction'),
-    _cbRow('幼儿对林氏(Ling\'s)六音的反应', ['无反应', '察觉', '辨识'], _draft.domainHearingMgmt, 'lingReaction'),
+    // 纸表第 2 页第 4 行**没有**复选框（结果记在紧随其后的「林氏六音」表格里），
+    // 导出端有意不写这一项；保留输入是作总体判断/内部沟通用。六音明细见 _lingTable()。
+    _cbRow('幼儿对林氏(Ling\'s)六音的反应（纸表无此栏，不导出）', ['无反应', '察觉', '辨识'], _draft.domainHearingMgmt, 'lingReaction'),
     const Text('林氏(Ling\'s)六音反应（点击单元格选择符号）', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _lingTable(context),
+    // 纸表「听觉能力」末尾的评估标准栏。原先 App 连输入框都没有（只读页读的又是
+    // 另一套不存在的 key），导出 PDF 自然也写不出东西。键名与
+    // HearingExportService.overlayFirstEval 第 2 页那段一一对应。
+    _hm('听觉记忆（项）', 'auditoryMemCount'),
+    _hm('听觉记忆组合类型', 'auditoryMemType'),
+    _hm('听觉描述·闭合式第几阶段', 'auditoryDescClosed'),
+    _hm('听觉描述·开放式第几阶段', 'auditoryDescOpen'),
+    _hm('言语识别平均得分', 'speechIdentifyScore'),
+    _hm('CAP 听觉行为分级（级别）', 'capLevel'),
     _sectionTitle('语言能力'),
     const Text('沟通模式', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _cbRow('沟通模式', ['非口语', '口语'], _draft.domainLanguage, 'commMode'),
@@ -1663,7 +1802,12 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     const Text('表达性语言程度', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _cbRow('无', ['无'], _draft.domainLanguage, 'expressingNone'),
     _cbRow('模仿复述', ['有'], _draft.domainLanguage, 'expressingImitate'),
+    // 纸表「模仿复述（句子长度__个字，例如____）」这一行的两个填空
+    _lang('模仿复述·句子长度', 'imitateLength', hint: '如 1~2 个字'),
+    _lang('模仿复述·例如', 'imitateExample'),
     _cbRow('主动表达', ['有'], _draft.domainLanguage, 'expressingActive'),
+    _lang('主动表达·句子长度', 'activeLength', hint: '如 7~9 个字'),
+    _lang('主动表达·例如', 'activeExample'),
     // 纸表 1.1.1 上这 7 行各自只有一个「□」，勾中即表示「处于该阶段」，
     // 所以每项只给一个选项「有」；此前传的是空数组，界面连框都不渲染，
     // 老师根本无从勾选 → domain_language 里永远没有这几个 key。
@@ -1678,6 +1822,10 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     const Text('问句能力', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _cbRow('问句理解', ['不能理解', '理解，会回答'], _draft.domainLanguage, 'questionUnderstand'),
     _cbRow('问句表达', ['会表达问句'], _draft.domainLanguage, 'questionExpress'),
+    // 纸表「语言能力」评估标准栏：平均语言年龄水平 / SIR 言语可懂度分级（导出会写）
+    _lang('问句能力说明', 'questionNote', maxLines: 2),
+    _lang('平均语言年龄水平', 'avgLanguageAge'),
+    _lang('SIR 言语可懂度分级（级别）', 'sirLevel'),
     _sectionTitle('言语能力'),
     const Text('发声能力', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
     _cbRow('能否发出声音', ['有', '无'], _draft.domainSpeech, 'canVoice'),
@@ -1711,11 +1859,19 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     _sectionTitle('沟通能力'),
     _cbRow('表达需求的方式', ['口语', '肢体', '其他__________'], _draft.domainCommunication, 'expressMode'),
     _cbRow('等待能力、轮替', ['可以', '不可以', '偶尔发生'], _draft.domainCommunication, 'turnTaking'),
-    _cbRow('眼神交流', ['无', '有__________'], _draft.domainCommunication, 'eyeContact'),
-    _cbRow('主动提问', ['无', '有__________'], _draft.domainCommunication, 'activeQuestion'),
-    _cbRow('主动互动', ['无', '有__________'], _draft.domainCommunication, 'activeInteraction'),
-    _cbRow('维持话题', ['无', '有__________'], _draft.domainCommunication, 'maintainTopic'),
-    _cbRow('开启话题', ['无', '有__________'], _draft.domainCommunication, 'openTopic'),
+    _cbRow('眼神交流', ['无', '有'], _draft.domainCommunication, 'eyeContact'),
+    _cbRow('主动提问', ['无', '有'], _draft.domainCommunication, 'activeQuestion'),
+    _cbRow('主动互动', ['无', '有'], _draft.domainCommunication, 'activeInteraction'),
+    _cbRow('维持话题', ['无', '有'], _draft.domainCommunication, 'maintainTopic'),
+    _cbRow('开启话题', ['无', '有'], _draft.domainCommunication, 'openTopic'),
+    // 与纸表下划线一一对应的说明（导出端会叠在「有 ______」的线上）
+    _cm('眼神交流说明', 'eyeContactNote'),
+    _cm('主动提问说明', 'activeQuestionNote'),
+    _cm('主动互动说明', 'activeInteractionNote'),
+    _cm('维持话题说明', 'maintainTopicNote'),
+    // 纸表「开启话题：□无 □有」后面没有横线，此项无处落纸，仅作内部备注
+    _cm('开启话题说明（纸表无此栏，仅内部备注）', 'openTopicNote'),
+    _cm('其他表达需求方式', 'expressModeOther'),
     _sectionTitle('行为表现'),
     _cbRow('好奇心', ['主动', '被动'], _draft.behaviorNote, 'curiosity'),
     _cbRow('稳定性', ['稳定', '不稳定'], _draft.behaviorNote, 'stability'),
@@ -1755,6 +1911,9 @@ class _FirstEvalEditScreenState extends ConsumerState<FirstEvalEditScreen> {
     _cbRow('作息规律性', ['规律', '不规律'], _draft.parentTrainingNote, 'routine'),
     _cbRow('资料收集能力', ['主动', '被动'], _draft.parentTrainingNote, 'dataCollect'),
     _cbRow('家长回应孩子需求', ['主动', '不理会', '需提醒'], _draft.parentTrainingNote, 'respondNeed'),
+    // 由 Part 1「家庭资料」移来：属家长受训/配合范畴，纸表上无对应勾选行。
+    _dd('康复意识', _draft.familyAwareness, (v) => _draft = _draft.copyWith(familyAwareness: v ?? ''), _awarenessLevels),
+    _dd('配合程度', _draft.familyCooperation, (v) => _draft = _draft.copyWith(familyCooperation: v ?? ''), _coopLevels),
   ]);
 
   // ═══ Part 3 — 综合建议 ═══
@@ -1844,11 +2003,20 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
   late RehabContEval _draft;
   String _seqStr = '';
 
-  /// Checkbox 选中状态。
-  final Map<String, Set<String>> _cbState = <String, Set<String>>{};
+  /// 纸表 1.1.2 各 JSON 域的**可变**草稿（domain → {key: 1..4}）。
+  ///
+  /// 表单按目录 data/cont_eval_catalog.dart 渲染，直接改这里的 Map，
+  /// 保存时再整体回写到 _draft（见 _syncMapsToDraft）——避免每点一格就 copyWith 37 个域。
+  late final Map<String, Map<String, dynamic>> _maps;
 
   /// 是否编辑已有记录（决定保存走 PUT 还是 POST）。
   bool _isEditing = false;
+
+  /// 当前停留在第几部分（只用于 AppBar 的页码提示）。
+  int _pageIdx = 0;
+
+  /// 纸表页数（目录里的页数）+ 首页（基本资料）+ 末页（总结）。
+  int get _partCount => contEvalCatalog.length + 2;
 
   @override
   void initState() {
@@ -1862,53 +2030,13 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
     } else {
       _draft = RehabContEval(archiveId: widget.archiveId);
     }
-    _ensureDomainMaps();
+    // ② 每个域取一份可变副本；域为 null 时补空 Map，否则勾选无处可写（旧实现曾因此丢数据）。
+    _maps = <String, Map<String, dynamic>>{
+      for (final String d in contEvalDomains)
+        d: Map<String, dynamic>.from(
+            _draft.domainMapOf(d) ?? const <String, dynamic>{}),
+    };
     _autoFillFromFirstEval();
-    _initCbState();
-  }
-
-  /// 确保所有 JSON 域 Map 非 null。
-  /// 修复前这些字段默认是 null，导致 _syncCbStateToDraft 直接 return，
-  /// 用户勾选的 checkbox 全部丢失（表现为「保存了但没存上」）。
-  void _ensureDomainMaps() {
-    Map<String, dynamic> m(Map<String, dynamic>? x) => x ?? <String, dynamic>{};
-    _draft = _draft.copyWith(
-      hearingData: m(_draft.hearingData),
-      auditoryMemoryData: m(_draft.auditoryMemoryData),
-      auditoryDescData: m(_draft.auditoryDescData),
-      recordingData: m(_draft.recordingData),
-      noisyEnvData: m(_draft.noisyEnvData),
-      groupListenData: m(_draft.groupListenData),
-      phoneSkillData: m(_draft.phoneSkillData),
-      activeListenData: m(_draft.activeListenData),
-      capLevelData: m(_draft.capLevelData),
-      languageVocabData: m(_draft.languageVocabData),
-      languageQuestionData: m(_draft.languageQuestionData),
-      sirLevelData: m(_draft.sirLevelData),
-      speechQualityData: m(_draft.speechQualityData),
-      speechSupraSegmentalData: m(_draft.speechSupraSegmentalData),
-      speechToneData: m(_draft.speechToneData),
-      speechVowelData: m(_draft.speechVowelData),
-      speechConsonantData: m(_draft.speechConsonantData),
-      cognitionClassifyData: m(_draft.cognitionClassifyData),
-      cognitionColorData: m(_draft.cognitionColorData),
-      cognitionNumberData: m(_draft.cognitionNumberData),
-      cognitionShapeData: m(_draft.cognitionShapeData),
-      cognitionTouchData: m(_draft.cognitionTouchData),
-      cognitionCompareData: m(_draft.cognitionCompareData),
-      cognitionSequenceData: m(_draft.cognitionSequenceData),
-      cognitionReasoningData: m(_draft.cognitionReasoningData),
-      cognitionAnalogyData: m(_draft.cognitionAnalogyData),
-      cognitionSynonymData: m(_draft.cognitionSynonymData),
-      cognitionAntonymData: m(_draft.cognitionAntonymData),
-      cognitionPunData: m(_draft.cognitionPunData),
-      cognitionJokeData: m(_draft.cognitionJokeData),
-      cognitionRiddleData: m(_draft.cognitionRiddleData),
-      commSequenceData: m(_draft.commSequenceData),
-      commBehaviorData: m(_draft.commBehaviorData),
-      commStrategyData: m(_draft.commStrategyData),
-      parentPerformanceData: m(_draft.parentPerformanceData),
-    );
   }
 
   /// 从已加载的档案详情中查找待编辑的持续评估。
@@ -1921,6 +2049,44 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
       if (c.id == id) return c;
     }
     return null;
+  }
+
+  /// 把目录表单改过的所有域回写到草稿（保存前调用）。
+  void _syncMapsToDraft() {
+    RehabContEval d = _draft;
+    for (final MapEntry<String, Map<String, dynamic>> e in _maps.entries) {
+      d = d.withDomain(e.key, e.value);
+    }
+    _draft = d;
+  }
+
+  /// 已填符号数 / 总符号数（进度提示用）。
+  (int, int) _progress() {
+    int n = 0;
+    for (final ContPage p in contEvalCatalog) {
+      for (final ContSection s in p.sections) {
+        if (s.domain == ContEvalCatalogPageView.topLevelDomain) continue;
+        final List<(String, List<ContItem>)> pairs = <(String, List<ContItem>)>[];
+        if (s.rows != null && s.rows!.isNotEmpty) {
+          for (final ContRow r in s.rows!) {
+            pairs.add((r.domain ?? s.domain ?? '', r.items));
+          }
+        } else if (s.cells != null && s.cells!.isNotEmpty) {
+          pairs.add((s.domain ?? '', s.cells!.expand((List<ContItem> x) => x).toList()));
+        } else {
+          pairs.add((s.domain ?? '', s.items ?? const <ContItem>[]));
+        }
+        for (final (String d, List<ContItem> items) in pairs) {
+          final Map<String, dynamic>? m = _maps[d];
+          if (m == null) continue;
+          for (final ContItem it in items) {
+            final dynamic v = m[it.key];
+            if (v != null && v.toString().isNotEmpty) n++;
+          }
+        }
+      }
+    }
+    return (n, contEvalSymCount);
   }
 
   /// 从首次评估自动填充基础信息（姓名/性别/补偿方式等）。
@@ -1954,80 +2120,6 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
-  }
-
-  void _initCbState() {
-    _cbState.clear();
-    void initFrom(Map<String, dynamic>? domain) {
-      if (domain == null) return;
-      for (final e in domain.entries) {
-        if (e.value is List) _cbState[e.key] = Set<String>.from(e.value as Iterable);
-      }
-    }
-    initFrom(_draft.hearingData);
-    initFrom(_draft.auditoryMemoryData);
-    initFrom(_draft.auditoryDescData);
-    initFrom(_draft.recordingData);
-    initFrom(_draft.noisyEnvData);
-    initFrom(_draft.groupListenData);
-    initFrom(_draft.phoneSkillData);
-    initFrom(_draft.activeListenData);
-    initFrom(_draft.capLevelData);
-    initFrom(_draft.languageVocabData);
-    initFrom(_draft.languageQuestionData);
-    initFrom(_draft.sirLevelData);
-    initFrom(_draft.speechQualityData);
-    initFrom(_draft.speechSupraSegmentalData);
-    initFrom(_draft.speechToneData);
-    initFrom(_draft.speechVowelData);
-    initFrom(_draft.speechConsonantData);
-    initFrom(_draft.cognitionClassifyData);
-    initFrom(_draft.cognitionColorData);
-    initFrom(_draft.cognitionNumberData);
-    initFrom(_draft.cognitionShapeData);
-    initFrom(_draft.cognitionTouchData);
-    initFrom(_draft.cognitionCompareData);
-    initFrom(_draft.cognitionSequenceData);
-    initFrom(_draft.cognitionReasoningData);
-    initFrom(_draft.cognitionAnalogyData);
-    initFrom(_draft.cognitionSynonymData);
-    initFrom(_draft.cognitionAntonymData);
-    initFrom(_draft.cognitionPunData);
-    initFrom(_draft.cognitionJokeData);
-    initFrom(_draft.cognitionRiddleData);
-    initFrom(_draft.commSequenceData);
-    initFrom(_draft.commBehaviorData);
-    initFrom(_draft.commStrategyData);
-    initFrom(_draft.parentPerformanceData);
-  }
-
-  void _syncCbStateToDraft() {
-    void syncTo(Map<String, dynamic>? domain) {
-      if (domain == null) return;
-      for (final e in _cbState.entries) {
-        if (domain.containsKey(e.key)) domain[e.key] = e.value.toList();
-      }
-    }
-    syncTo(_draft.hearingData); syncTo(_draft.auditoryMemoryData);
-    syncTo(_draft.auditoryDescData); syncTo(_draft.recordingData);
-    syncTo(_draft.noisyEnvData); syncTo(_draft.groupListenData);
-    syncTo(_draft.phoneSkillData); syncTo(_draft.activeListenData);
-    syncTo(_draft.capLevelData); syncTo(_draft.languageVocabData);
-    syncTo(_draft.languageQuestionData); syncTo(_draft.sirLevelData);
-    syncTo(_draft.speechQualityData); syncTo(_draft.speechSupraSegmentalData);
-    syncTo(_draft.speechToneData); syncTo(_draft.speechVowelData);
-    syncTo(_draft.speechConsonantData); syncTo(_draft.cognitionClassifyData);
-    syncTo(_draft.cognitionColorData); syncTo(_draft.cognitionNumberData);
-    syncTo(_draft.cognitionShapeData); syncTo(_draft.cognitionTouchData);
-    syncTo(_draft.cognitionCompareData);
-    syncTo(_draft.cognitionSequenceData);
-    syncTo(_draft.cognitionReasoningData); syncTo(_draft.cognitionAnalogyData);
-    syncTo(_draft.cognitionSynonymData); syncTo(_draft.cognitionAntonymData);
-    syncTo(_draft.cognitionPunData); syncTo(_draft.cognitionJokeData);
-    syncTo(_draft.cognitionRiddleData);
-    syncTo(_draft.commSequenceData);
-    syncTo(_draft.commBehaviorData); syncTo(_draft.commStrategyData);
-    syncTo(_draft.parentPerformanceData);
   }
 
   // ── 表单组件 ──
@@ -2070,27 +2162,100 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
             contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 0)),
           items: opts.map((o) => DropdownMenuItem<String>(value: o, child: Text(o, style: const TextStyle(fontSize: 14)))).toList(),
           onChanged: o));
-  Widget _partNav({int?p,int?n,String?l})=>Container(padding:const EdgeInsets.symmetric(vertical:10),
-    decoration:BoxDecoration(color:Colors.grey.shade50,borderRadius:BorderRadius.circular(8)),
-    child:Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[
-      if(p!=null) TextButton.icon(onPressed:()=>_pageController.animateToPage(p,duration:const Duration(milliseconds:300),curve:Curves.easeInOut),icon:const Icon(Icons.arrow_back,size:16),label:const Text('上一部分')) else const SizedBox(width:80),
-      if(n!=null) FilledButton.tonal(onPressed:()=>_pageController.animateToPage(n,duration:const Duration(milliseconds:300),curve:Curves.easeInOut),child:Text(l??'下一部分→')) else const SizedBox(width:80),
-    ]));
+  /// 上一部分 / 下一部分导航。纸表 1.1.2 共 7 页，加上「基本资料」与「总结」共 9 部分。
+  Widget _partNav(int idx) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    decoration: BoxDecoration(
+        color: Colors.grey.shade50, borderRadius: BorderRadius.circular(8)),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: <Widget>[
+      if (idx > 0)
+        TextButton.icon(
+          onPressed: () => _goPage(idx - 1),
+          icon: const Icon(Icons.arrow_back, size: 16),
+          label: const Text('上一部分'),
+        )
+      else
+        const SizedBox(width: 80),
+      Text('${idx + 1} / $_partCount',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+      if (idx < _partCount - 1)
+        FilledButton.tonal(
+          onPressed: () => _goPage(idx + 1),
+          child: Text(idx == _partCount - 2 ? '下一部分：总结 →' : '下一部分 →'),
+        )
+      else
+        const SizedBox(width: 80),
+    ]),
+  );
+
+  void _goPage(int i) {
+    setState(() => _pageIdx = i);
+    _pageController.animateToPage(i,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+  }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title:Text(_isEditing?'编辑持续评估（第${_seqStr.isEmpty?"?":_seqStr}次）':'新建持续评估'),leading:IconButton(icon:const Icon(Icons.arrow_back),onPressed:()=>context.pop())),
-    body:Form(key:_formKey,child:Column(children:[
-      // 新建时给一个通往「历史持续评估」的入口：老师从中枢页「持续评估」卡片进来是直接填新表，
-      // 看不到以前填过什么、也改不了。编辑模式下当前这条就是历史记录，不再重复提示。
-      if (!_isEditing) _ContEvalHistoryBanner(archiveId: widget.archiveId),
-      Expanded(child:PageView(controller:_pageController,physics:const NeverScrollableScrollPhysics(),
-        children:[_buildPart1Basic(),_buildPart2Eval(),_buildPart3Advice()])),
-      SafeArea(child:Padding(padding:const EdgeInsets.fromLTRB(16,0,16,8),
-        child:FilledButton.icon(onPressed:_save,icon:const Icon(Icons.save,size:18),label:const Text('保存持续评估')),
-      )),
-    ])),
-  );
+  Widget build(BuildContext context) {
+    final (int filled, int total) = _progress();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isEditing
+            ? '编辑持续评估（第${_seqStr.isEmpty ? "?" : _seqStr}次）'
+            : '新建持续评估'),
+        leading: IconButton(
+            icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
+        // 纸表有 512 个符号格，不给进度提示老师根本不知道填到哪了。
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(22),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 6, left: 16, right: 16),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                  '第 ${_pageIdx + 1}/$_partCount 部分 · 按纸表 1.1.2 逐项录入 · 符号已填 $filled / $total',
+                  style: const TextStyle(fontSize: 11.5)),
+            ),
+          ),
+        ),
+      ),
+      body: Form(
+        key: _formKey,
+        child: Column(children: <Widget>[
+          // 新建时给一个通往「历史持续评估」的入口：老师从中枢页「持续评估」卡片进来是直接填新表，
+          // 看不到以前填过什么、也改不了。编辑模式下当前这条就是历史记录，不再重复提示。
+          if (!_isEditing) _ContEvalHistoryBanner(archiveId: widget.archiveId),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (int i) => setState(() => _pageIdx = i),
+              children: <Widget>[
+                _buildBasicPage(),
+                // 纸表 7 页：条目与顺序完全由目录驱动（勿手写字段清单，手写必漏项）。
+                for (final ContPage p in contEvalCatalog)
+                  ContEvalCatalogPageView(
+                    page: p,
+                    maps: _maps,
+                    onChanged: () => setState(() {}),
+                  ),
+                _buildSummaryPage(),
+              ],
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: FilledButton.icon(
+                onPressed: _save,
+                icon: const Icon(Icons.save, size: 18),
+                label: const Text('保存持续评估'),
+              ),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) {
@@ -2102,7 +2267,8 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
       return;
     }
     _formKey.currentState!.save();
-    _syncCbStateToDraft();
+    // 目录表单改的是 _maps，保存前必须整体回写到草稿，否则一页都存不上。
+    _syncMapsToDraft();
     final seq = int.tryParse(_seqStr);
     final bool ok = await ref
         .read(rehabArchiveDetailProvider(widget.archiveId).notifier)
@@ -2120,113 +2286,57 @@ class _ContEvalEditScreenState extends ConsumerState<ContEvalEditScreen> {
     }
   }
 
-  // ═══ Cont Eval Part 1 ═══
-  Widget _buildPart1Basic(){final detail=ref.watch(rehabArchiveDetailProvider(widget.archiveId)).detail;final a=detail?.archive;final fe=detail?.firstEval;
-    final comp=<String>[];if(fe!=null){if(fe.leftCompensationType.isNotEmpty)comp.add('左：${fe.leftCompensationType}');if(fe.rightCompensationType.isNotEmpty)comp.add('右：${fe.rightCompensationType}');}
-    return ListView(padding:const EdgeInsets.fromLTRB(16,12,16,8),children:[
-      _partNav(n:1,l:'下一部分：评估内容→'),_sectionTitle('基本资料'),
-      Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Expanded(flex:2,child:_tf('姓名',a?.childName??'',(v){})),Expanded(child:_dd('性别',fe?.gender??'',(v){},['男','女'])),
+  // ═══ 第 0 部分：基本资料（纸表首页，对应实体顶层列，不在目录里）═══
+  Widget _buildBasicPage() {
+    final detail = ref.watch(rehabArchiveDetailProvider(widget.archiveId)).detail;
+    final a = detail?.archive;
+    final fe = detail?.firstEval;
+    final comp = <String>[];
+    if (fe != null) {
+      if (fe.leftCompensationType.isNotEmpty) comp.add('左：${fe.leftCompensationType}');
+      if (fe.rightCompensationType.isNotEmpty) comp.add('右：${fe.rightCompensationType}');
+    }
+    return ListView(padding: const EdgeInsets.fromLTRB(16, 12, 16, 8), children: [
+      _partNav(0),
+      _sectionTitle('基本资料'),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(flex: 2, child: _tf('姓名', a?.childName ?? '', (v) {})),
+        Expanded(child: _dd('性别', fe?.gender ?? '', (v) {}, ['男', '女'])),
       ]),
-      Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Expanded(child:_tf('生理年龄',_draft.physiologicalAge,(v)=>_draft=_draft.copyWith(physiologicalAge:v))),
-        Expanded(child:_tf('听觉年龄',_draft.hearingAge,(v)=>_draft=_draft.copyWith(hearingAge:v))),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: _tf('生理年龄', _draft.physiologicalAge,
+            (v) => _draft = _draft.copyWith(physiologicalAge: v))),
+        Expanded(child: _tf('听觉年龄', _draft.hearingAge,
+            (v) => _draft = _draft.copyWith(hearingAge: v))),
       ]),
-      Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Expanded(child:_df('第一次评估时间',_draft.evalTime1,(d)=>_draft=_draft.copyWith(evalTime1:d))),
-        Expanded(child:_df('第二次评估时间',_draft.evalTime2,(d)=>_draft=_draft.copyWith(evalTime2:d))),
-        Expanded(child:_df('第三次评估时间',_draft.evalTime3,(d)=>_draft=_draft.copyWith(evalTime3:d))),
+      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: _df('第一次评估时间', _draft.evalTime1,
+            (d) => _draft = _draft.copyWith(evalTime1: d))),
+        Expanded(child: _df('第二次评估时间', _draft.evalTime2,
+            (d) => _draft = _draft.copyWith(evalTime2: d))),
+        Expanded(child: _df('第三次评估时间', _draft.evalTime3,
+            (d) => _draft = _draft.copyWith(evalTime3: d))),
       ]),
-      _sectionTitle('本次评估信息'),_tf('评估序号',_seqStr,(v)=>_seqStr=v,keyboard:TextInputType.number),
-      _df('评估时间',_draft.evalDate,(d)=>_draft=_draft.copyWith(evalDate:d)),
-      _tf('评估者姓名',_draft.evaluatorName,(v)=>_draft=_draft.copyWith(evaluatorName:v)),
-      if(comp.isNotEmpty)...[const SizedBox(height:6),Text('补偿/重建方式：${comp.join(" / ")}',style:const TextStyle(fontSize:13,color:Colors.black87))],
-      _sectionTitle('听觉能力'),
-      SymbolField(label:'听觉记忆',value:HearingSymbol.indexFromValue(_draft.hearingData!['auditoryMemScore']),onChanged:(v)=>setState(()=>_draft.hearingData!['auditoryMemScore']=v)),
-      SymbolField(label:'察觉: 自己名字 / 语音 / 环境音 / 有声玩具',value:HearingSymbol.indexFromValue(_draft.hearingData!['soundDetect']),onChanged:(v)=>setState(()=>_draft.hearingData!['soundDetect']=v)),
-      SymbolField(label:'辨识: 自己名字 / 语音 / 环境音 / 有声玩具',value:HearingSymbol.indexFromValue(_draft.hearingData!['soundIdentify']),onChanged:(v)=>setState(()=>_draft.hearingData!['soundIdentify']=v)),
-      _sectionTitle('语言能力'),
-      SymbolField(label:'词汇量',value:HearingSymbol.indexFromValue(_draft.capLevelData!['vocabCount']),onChanged:(v)=>setState(()=>_draft.capLevelData!['vocabCount']=v)),
-      SymbolField(label:'音节/声韵母区别',value:HearingSymbol.indexFromValue(_draft.languageVocabData!['diffWord']),onChanged:(v)=>setState(()=>_draft.languageVocabData!['diffWord']=v)),
-      _sectionTitle('言语能力'),
-      SymbolField(label:'音质',value:HearingSymbol.indexFromValue(_draft.speechQualityData!['natural']),onChanged:(v)=>setState(()=>_draft.speechQualityData!['natural']=v)),
-      // 纸表 1.1.2 的「音质」是 4 个 □，没有说明文本框；这栏只作 App 内部备注。
-      // 原来 onSaved 是空函数，老师填了根本不保存——已改为写 speechQualityData['note']。
-      _tf('清晰度说明（内部备注）',jsonStr(_draft.speechQualityData,['note']),
-          (v)=>setState(()=>_draft.speechQualityData!['note']=v),maxLines:2),
-      _sectionTitle('认知能力'),
-      SymbolField(label:'基础颜色辨认',value:HearingSymbol.indexFromValue(_draft.cognitionColorData!['basic']),onChanged:(v)=>setState(()=>_draft.cognitionColorData!['basic']=v)),
-      SymbolField(label:'扩展颜色辨认',value:HearingSymbol.indexFromValue(_draft.cognitionColorData!['extended']),onChanged:(v)=>setState(()=>_draft.cognitionColorData!['extended']=v)),
-      SymbolField(label:'抽象颜色概念',value:HearingSymbol.indexFromValue(_draft.cognitionColorData!['abstract']),onChanged:(v)=>setState(()=>_draft.cognitionColorData!['abstract']=v)),
-      _sectionTitle('沟通能力'),
-      SymbolField(label:'沟通策略',value:HearingSymbol.indexFromValue(_draft.commStrategyData!['strategy']),onChanged:(v)=>setState(()=>_draft.commStrategyData!['strategy']=v)),
-      SymbolField(label:'轮流/轮替',value:HearingSymbol.indexFromValue(_draft.commBehaviorData!['turnTaking']),onChanged:(v)=>setState(()=>_draft.commBehaviorData!['turnTaking']=v)),
-      SymbolField(label:'眼神交流',value:HearingSymbol.indexFromValue(_draft.commBehaviorData!['eyeContact']),onChanged:(v)=>setState(()=>_draft.commBehaviorData!['eyeContact']=v)),
-      SymbolField(label:'共同注意力',value:HearingSymbol.indexFromValue(_draft.commBehaviorData!['jointAttn']),onChanged:(v)=>setState(()=>_draft.commBehaviorData!['jointAttn']=v)),
-      _sectionTitle('家长执行成效'),
-      SymbolField(label:'康复训练执行情况',value:HearingSymbol.indexFromValue(_draft.parentPerformanceData!['trainingExec']),onChanged:(v)=>setState(()=>_draft.parentPerformanceData!['trainingExec']=v)),
-      SymbolField(label:'配戴助听设备情况',value:HearingSymbol.indexFromValue(_draft.parentPerformanceData!['deviceWear']),onChanged:(v)=>setState(()=>_draft.parentPerformanceData!['deviceWear']=v)),
-      SymbolField(label:'亲子互动质量',value:HearingSymbol.indexFromValue(_draft.parentPerformanceData!['interactionQ']),onChanged:(v)=>setState(()=>_draft.parentPerformanceData!['interactionQ']=v)),
-      SymbolField(label:'家庭康复环境支持',value:HearingSymbol.indexFromValue(_draft.parentPerformanceData!['homeSupport']),onChanged:(v)=>setState(()=>_draft.parentPerformanceData!['homeSupport']=v)),
-    ]);}
+      _sectionTitle('本次评估信息'),
+      _tf('评估序号', _seqStr, (v) => _seqStr = v, keyboard: TextInputType.number),
+      _df('评估时间', _draft.evalDate, (d) => _draft = _draft.copyWith(evalDate: d)),
+      _tf('评估者姓名', _draft.evaluatorName,
+          (v) => _draft = _draft.copyWith(evaluatorName: v)),
+      if (comp.isNotEmpty) ...[
+        const SizedBox(height: 6),
+        Text('补偿/重建方式：${comp.join(" / ")}',
+            style: const TextStyle(fontSize: 13, color: Colors.black87)),
+      ],
+    ]);
+  }
 
-  // ═══ Cont Eval Part 2 ═══
-  Widget _buildPart2Eval()=>ListView(padding:const EdgeInsets.all(16),children:[
-    _partNav(p:0,n:2,l:'下一部分：总结→'),
-    _sectionTitle('听觉能力（详细）'),
-    SymbolField(label:'有情景提示下',value:HearingSymbol.indexFromValue(_draft.auditoryDescData!['withCue']),onChanged:(v)=>setState(()=>_draft.auditoryDescData!['withCue']=v)),
-    SymbolField(label:'无情景提示下',value:HearingSymbol.indexFromValue(_draft.auditoryDescData!['noCue']),onChanged:(v)=>setState(()=>_draft.auditoryDescData!['noCue']=v)),
-    _sectionTitle('言语能力（超音段/声调/韵母/声母）'),
-    SymbolField(label:'时间',value:HearingSymbol.indexFromValue(_draft.speechSupraSegmentalData!['time']),onChanged:(v)=>setState(()=>_draft.speechSupraSegmentalData!['time']=v)),
-    SymbolField(label:'音量',value:HearingSymbol.indexFromValue(_draft.speechSupraSegmentalData!['volume']),onChanged:(v)=>setState(()=>_draft.speechSupraSegmentalData!['volume']=v)),
-    SymbolField(label:'音调',value:HearingSymbol.indexFromValue(_draft.speechSupraSegmentalData!['pitch']),onChanged:(v)=>setState(()=>_draft.speechSupraSegmentalData!['pitch']=v)),
-    SymbolField(label:'声调',value:HearingSymbol.indexFromValue(_draft.speechToneData!['tones']),onChanged:(v)=>setState(()=>_draft.speechToneData!['tones']=v)),
-    SymbolField(label:'单韵母',value:HearingSymbol.indexFromValue(_draft.speechVowelData!['single']),onChanged:(v)=>setState(()=>_draft.speechVowelData!['single']=v)),
-    SymbolField(label:'韵母轮换',value:HearingSymbol.indexFromValue(_draft.speechVowelData!['rotation']),onChanged:(v)=>setState(()=>_draft.speechVowelData!['rotation']=v)),
-    SymbolField(label:'复合韵母(尾)',value:HearingSymbol.indexFromValue(_draft.speechVowelData!['compoundEnd']),onChanged:(v)=>setState(()=>_draft.speechVowelData!['compoundEnd']=v)),
-    SymbolField(label:'鼻韵母(尾)',value:HearingSymbol.indexFromValue(_draft.speechVowelData!['nasalEnd']),onChanged:(v)=>setState(()=>_draft.speechVowelData!['nasalEnd']=v)),
-    SymbolField(label:'鼻韵母(首)',value:HearingSymbol.indexFromValue(_draft.speechVowelData!['nasalStart']),onChanged:(v)=>setState(()=>_draft.speechVowelData!['nasalStart']=v)),
-    SymbolField(label:'声母组1',value:HearingSymbol.indexFromValue(_draft.speechConsonantData!['group1']),onChanged:(v)=>setState(()=>_draft.speechConsonantData!['group1']=v)),
-    SymbolField(label:'声母组2',value:HearingSymbol.indexFromValue(_draft.speechConsonantData!['group2']),onChanged:(v)=>setState(()=>_draft.speechConsonantData!['group2']=v)),
-    _sectionTitle('认知能力（详细）'),
-    SymbolField(label:'唱数',value:HearingSymbol.indexFromValue(_draft.cognitionNumberData!['countSing']),onChanged:(v)=>setState(()=>_draft.cognitionNumberData!['countSing']=v)),
-    SymbolField(label:'认识数字',value:HearingSymbol.indexFromValue(_draft.cognitionNumberData!['countRecognize']),onChanged:(v)=>setState(()=>_draft.cognitionNumberData!['countRecognize']=v)),
-    SymbolField(label:'比较数字大小',value:HearingSymbol.indexFromValue(_draft.cognitionNumberData!['compareNum']),onChanged:(v)=>setState(()=>_draft.cognitionNumberData!['compareNum']=v)),
-    SymbolField(label:'量的概念',value:HearingSymbol.indexFromValue(_draft.cognitionNumberData!['quantity']),onChanged:(v)=>setState(()=>_draft.cognitionNumberData!['quantity']=v)),
-    SymbolField(label:'比较数量多少',value:HearingSymbol.indexFromValue(_draft.cognitionNumberData!['compareQty']),onChanged:(v)=>setState(()=>_draft.cognitionNumberData!['compareQty']=v)),
-    SymbolField(label:'币值的概念',value:HearingSymbol.indexFromValue(_draft.cognitionNumberData!['money']),onChanged:(v)=>setState(()=>_draft.cognitionNumberData!['money']=v)),
-    SymbolField(label:'触觉1',value:HearingSymbol.indexFromValue(_draft.cognitionTouchData!['texture1']),onChanged:(v)=>setState(()=>_draft.cognitionTouchData!['texture1']=v)),
-    SymbolField(label:'触觉2',value:HearingSymbol.indexFromValue(_draft.cognitionTouchData!['texture2']),onChanged:(v)=>setState(()=>_draft.cognitionTouchData!['texture2']=v)),
-    // ── 认知第二批（纸表 1.1.2 第 6 页）：顺序/推理/语言游戏 ──
-    _sectionTitle('认知能力（顺序与推理）'),
-    SymbolField(label:'顺序概念：在家中的一些事情(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['homeEvents']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['homeEvents']=v)),
-    SymbolField(label:'顺序概念：简单的手指游戏(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['fingerGame']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['fingerGame']=v)),
-    SymbolField(label:'顺序概念：形状、数量(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['shapeQty']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['shapeQty']=v)),
-    SymbolField(label:'顺序概念：旅游（相片）(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['travelPhotos']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['travelPhotos']=v)),
-    SymbolField(label:'顺序概念：有顺序之指令(3岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['seqInstructions']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['seqInstructions']=v)),
-    SymbolField(label:'顺序概念：含2~3个段落的故事',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['story23']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['story23']=v)),
-    SymbolField(label:'顺序概念：听故事及顺序(4岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['storyListen']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['storyListen']=v)),
-    SymbolField(label:'顺序概念：童谣、儿歌(4岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['rhymes']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['rhymes']=v)),
-    SymbolField(label:'顺序概念：以不同顺序发展一则故事(5岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['storyDevelop']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['storyDevelop']=v)),
-    SymbolField(label:'顺序概念：故事接龙(开始/中间/结局)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['storyChain']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['storyChain']=v)),
-    SymbolField(label:'顺序概念：包含语法的顺序描述(6岁)',value:HearingSymbol.indexFromValue(_draft.cognitionSequenceData!['grammarSeq']),onChanged:(v)=>setState(()=>_draft.cognitionSequenceData!['grammarSeq']=v)),
-    SymbolField(label:'推理：事件推理',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['event']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['event']=v)),
-    SymbolField(label:'推理：时间推理',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['time']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['time']=v)),
-    SymbolField(label:'推理：字词推理',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['word']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['word']=v)),
-    SymbolField(label:'推理：找原因',value:HearingSymbol.indexFromValue(_draft.cognitionReasoningData!['cause']),onChanged:(v)=>setState(()=>_draft.cognitionReasoningData!['cause']=v)),
-    _sectionTitle('认知能力（词汇与语言游戏）'),
-    SymbolField(label:'类推',value:HearingSymbol.indexFromValue(_draft.cognitionAnalogyData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionAnalogyData!['level']=v)),
-    SymbolField(label:'同义词',value:HearingSymbol.indexFromValue(_draft.cognitionSynonymData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionSynonymData!['level']=v)),
-    SymbolField(label:'相反词',value:HearingSymbol.indexFromValue(_draft.cognitionAntonymData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionAntonymData!['level']=v)),
-    SymbolField(label:'双关语',value:HearingSymbol.indexFromValue(_draft.cognitionPunData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionPunData!['level']=v)),
-    SymbolField(label:'笑话',value:HearingSymbol.indexFromValue(_draft.cognitionJokeData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionJokeData!['level']=v)),
-    SymbolField(label:'谜语',value:HearingSymbol.indexFromValue(_draft.cognitionRiddleData!['level']),onChanged:(v)=>setState(()=>_draft.cognitionRiddleData!['level']=v)),
-  ]);
-
-  // ═══ Cont Eval Part 3 ═══
-  Widget _buildPart3Advice()=>ListView(padding:const EdgeInsets.all(16),children:[
-    _partNav(p:1),_sectionTitle('总结'),
-    _tf('教师评语',_draft.teacherNotes,(v)=>_draft=_draft.copyWith(teacherNotes:v),maxLines:4),
-    _tf('家长表现备注',_draft.parentPerformance,(v)=>_draft=_draft.copyWith(parentPerformance:v),maxLines:3),
+  // ═══ 最后一部分：总结（教师评语 / 家长表现备注）═══
+  Widget _buildSummaryPage() => ListView(padding: const EdgeInsets.all(16), children: [
+    _partNav(_partCount - 1),
+    _sectionTitle('总结'),
+    _tf('教师评语', _draft.teacherNotes,
+        (v) => _draft = _draft.copyWith(teacherNotes: v), maxLines: 4),
+    _tf('家长表现备注', _draft.parentPerformance,
+        (v) => _draft = _draft.copyWith(parentPerformance: v), maxLines: 3),
   ]);
 }

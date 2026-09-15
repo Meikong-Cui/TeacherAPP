@@ -970,6 +970,102 @@ class RehabContEval {
       );
 }
 
+/// 按「实体字段名」读写 RehabContEval 的各个 JSON 域。
+///
+/// 持续评估表（纸表 1.1.2）的条目目录 data/cont_eval_catalog.dart 里，
+/// 每个区块挂的 domain 就是这里的字段名；表单按目录渲染时用这两个方法
+/// 统一取值 / 回写，避免在 UI 层写 37 个 copyWith 分支。
+extension RehabContEvalDomainX on RehabContEval {
+  /// 取某个域的反序列化 Map；字段名非法或为 null 时返回 null。
+  Map<String, dynamic>? domainMapOf(String field) {
+    switch (field) {
+      case 'hearingData': return hearingData;
+      case 'auditoryMemoryData': return auditoryMemoryData;
+      case 'auditoryDescData': return auditoryDescData;
+      case 'recordingData': return recordingData;
+      case 'noisyEnvData': return noisyEnvData;
+      case 'groupListenData': return groupListenData;
+      case 'phoneSkillData': return phoneSkillData;
+      case 'activeListenData': return activeListenData;
+      case 'hearingEvalScore': return hearingEvalScore;
+      case 'capLevelData': return capLevelData;
+      case 'languageVocabData': return languageVocabData;
+      case 'languageQuestionData': return languageQuestionData;
+      case 'languageEvalScore': return languageEvalScore;
+      case 'sirLevelData': return sirLevelData;
+      case 'speechQualityData': return speechQualityData;
+      case 'speechSupraSegmentalData': return speechSupraSegmentalData;
+      case 'speechToneData': return speechToneData;
+      case 'speechVowelData': return speechVowelData;
+      case 'speechConsonantData': return speechConsonantData;
+      case 'cognitionClassifyData': return cognitionClassifyData;
+      case 'cognitionColorData': return cognitionColorData;
+      case 'cognitionNumberData': return cognitionNumberData;
+      case 'cognitionShapeData': return cognitionShapeData;
+      case 'cognitionTouchData': return cognitionTouchData;
+      case 'cognitionCompareData': return cognitionCompareData;
+      case 'cognitionSequenceData': return cognitionSequenceData;
+      case 'cognitionReasoningData': return cognitionReasoningData;
+      case 'cognitionAnalogyData': return cognitionAnalogyData;
+      case 'cognitionSynonymData': return cognitionSynonymData;
+      case 'cognitionAntonymData': return cognitionAntonymData;
+      case 'cognitionPunData': return cognitionPunData;
+      case 'cognitionJokeData': return cognitionJokeData;
+      case 'cognitionRiddleData': return cognitionRiddleData;
+      case 'commSequenceData': return commSequenceData;
+      case 'commBehaviorData': return commBehaviorData;
+      case 'commStrategyData': return commStrategyData;
+      case 'parentPerformanceData': return parentPerformanceData;
+      default: return null;
+    }
+  }
+
+  /// 把某个域整体替换为新 Map，返回新的草稿；字段名非法时原样返回。
+  RehabContEval withDomain(String field, Map<String, dynamic> value) {
+    switch (field) {
+      case 'hearingData': return copyWith(hearingData: value);
+      case 'auditoryMemoryData': return copyWith(auditoryMemoryData: value);
+      case 'auditoryDescData': return copyWith(auditoryDescData: value);
+      case 'recordingData': return copyWith(recordingData: value);
+      case 'noisyEnvData': return copyWith(noisyEnvData: value);
+      case 'groupListenData': return copyWith(groupListenData: value);
+      case 'phoneSkillData': return copyWith(phoneSkillData: value);
+      case 'activeListenData': return copyWith(activeListenData: value);
+      case 'hearingEvalScore': return copyWith(hearingEvalScore: value);
+      case 'capLevelData': return copyWith(capLevelData: value);
+      case 'languageVocabData': return copyWith(languageVocabData: value);
+      case 'languageQuestionData': return copyWith(languageQuestionData: value);
+      case 'languageEvalScore': return copyWith(languageEvalScore: value);
+      case 'sirLevelData': return copyWith(sirLevelData: value);
+      case 'speechQualityData': return copyWith(speechQualityData: value);
+      case 'speechSupraSegmentalData':
+        return copyWith(speechSupraSegmentalData: value);
+      case 'speechToneData': return copyWith(speechToneData: value);
+      case 'speechVowelData': return copyWith(speechVowelData: value);
+      case 'speechConsonantData': return copyWith(speechConsonantData: value);
+      case 'cognitionClassifyData': return copyWith(cognitionClassifyData: value);
+      case 'cognitionColorData': return copyWith(cognitionColorData: value);
+      case 'cognitionNumberData': return copyWith(cognitionNumberData: value);
+      case 'cognitionShapeData': return copyWith(cognitionShapeData: value);
+      case 'cognitionTouchData': return copyWith(cognitionTouchData: value);
+      case 'cognitionCompareData': return copyWith(cognitionCompareData: value);
+      case 'cognitionSequenceData': return copyWith(cognitionSequenceData: value);
+      case 'cognitionReasoningData': return copyWith(cognitionReasoningData: value);
+      case 'cognitionAnalogyData': return copyWith(cognitionAnalogyData: value);
+      case 'cognitionSynonymData': return copyWith(cognitionSynonymData: value);
+      case 'cognitionAntonymData': return copyWith(cognitionAntonymData: value);
+      case 'cognitionPunData': return copyWith(cognitionPunData: value);
+      case 'cognitionJokeData': return copyWith(cognitionJokeData: value);
+      case 'cognitionRiddleData': return copyWith(cognitionRiddleData: value);
+      case 'commSequenceData': return copyWith(commSequenceData: value);
+      case 'commBehaviorData': return copyWith(commBehaviorData: value);
+      case 'commStrategyData': return copyWith(commStrategyData: value);
+      case 'parentPerformanceData': return copyWith(parentPerformanceData: value);
+      default: return this;
+    }
+  }
+}
+
 /// 教学计划。
 class RehabTeachingPlan {
   RehabTeachingPlan({
