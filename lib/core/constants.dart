@@ -3,7 +3,10 @@ class AppConstants {
   const AppConstants._();
 
   /// 品牌主色（与演示原型 / OA 后台一致）。
-  static const String brandName = '语亦丰康复';
+  static const String brandName = '哈哈龙康复';
+
+  /// 品牌拉丁文（登录页品牌标识下方的小字，全大写宽字距）。
+  static const String brandLatin = 'HA HA LONG';
 
   /// 后端基础地址（App 复用 OA 后台同一套 API）。
   ///

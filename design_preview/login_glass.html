@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>教师端登录页 · 毛玻璃改造预览</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/outfit@5.0.0/400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/outfit@5.0.0/600.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/playfair-display@5.0.0/700.css">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --page-bg:#0d1117; --page-fg:#e6edf3; --page-mut:#8b949e;
+    --page-line:rgba(255,255,255,.09); --panel:rgba(255,255,255,.035);
+    --accent:#14B8A6;
+    --latin:'Outfit','Inter',system-ui,sans-serif;
+  }
+  body{
+    background:var(--page-bg); color:var(--page-fg);
+    font-family:var(--latin),'Microsoft YaHei UI','PingFang SC','Microsoft YaHei',sans-serif;
+    padding:28px 24px 64px; line-height:1.55; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  header h1{font-size:22px;font-weight:600;letter-spacing:.01em}
+  header p{color:var(--page-mut);font-size:13px;margin-top:6px}
+  .badge{display:inline-block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:#5EEAD4;border:1px solid rgba(94,234,212,.3);background:rgba(20,184,166,.1);
+    padding:2px 8px;border-radius:999px;margin-bottom:10px;font-family:var(--latin)}
+
+  .stage{display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;margin-top:28px}
+
+  /* ---------- 手机外框 ---------- */
+  .phone-col{display:flex;flex-direction:column;align-items:center;gap:12px}
+  .phone-label{font-size:12px;color:var(--page-mut);letter-spacing:.12em}
+  .phone-label b{color:var(--page-fg);font-weight:600}
+  .phone{
+    width:330px;height:716px;border-radius:46px;padding:10px;
+    background:linear-gradient(150deg,#3a4450,#1b2129 45%,#2d3540);
+    box-shadow:0 30px 70px -20px rgba(0,0,0,.85), 0 0 0 1px rgba(255,255,255,.07);
+    position:relative;
+  }
+  .screen{
+    width:100%;height:100%;border-radius:37px;overflow:hidden;position:relative;
+    isolation:isolate;
+  }
+  .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:96px;height:24px;
+    background:#12171d;border-radius:0 0 16px 16px;z-index:60}
+  .status{position:absolute;top:0;left:0;right:0;height:44px;display:flex;align-items:center;
+    justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600;z-index:55;
+    font-family:var(--latin);letter-spacing:.02em}
+  .homebar{position:absolute;bottom:7px;left:50%;transform:translateX(-50%);width:120px;height:4px;
+    border-radius:99px;background:currentColor;opacity:.35;z-index:60}
+
+  /* ---------- 背景层（毛玻璃要有东西可磨） ---------- */
+  .bg{position:absolute;inset:0;z-index:1;background:var(--bg-base);transition:background .3s}
+  .blob{position:absolute;border-radius:50%;filter:blur(46px);opacity:.85;z-index:2;
+    transition:background .35s, transform .6s}
+  .b1{width:280px;height:280px;top:-60px;left:-70px;background:var(--bl1)}
+  .b2{width:240px;height:240px;top:150px;right:-90px;background:var(--bl2)}
+  .b3{width:300px;height:300px;bottom:-80px;left:-40px;background:var(--bl3)}
+  .b4{width:170px;height:170px;top:52%;right:20px;background:var(--bl4)}
+  .grain{position:absolute;inset:0;z-index:3;opacity:.28;mix-blend-mode:overlay;pointer-events:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='.5'/></svg>")}
+
+  /* ---------- 页面内容 ---------- */
+  .content{position:relative;z-index:10;height:100%;display:flex;flex-direction:column;
+    padding:52px 20px 26px}
+  .topbar{display:flex;justify-content:flex-end;align-items:center;height:34px;flex:0 0 auto}
+  .icon-btn{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;
+    background:var(--chip-bg);border:1px solid var(--chip-bd);backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);color:var(--fg);font-size:15px;line-height:1}
+  .spacer{flex:1 1 auto}
+  .foot-note{font-size:11px;color:var(--fg-mut);text-align:center;padding-bottom:14px;letter-spacing:.04em}
+
+  /* ---------- 毛玻璃卡片 ---------- */
+  .glass{
+    position:relative;border-radius:var(--g-radius);
+    background:var(--g-bg);
+    backdrop-filter:blur(var(--g-blur)) saturate(190%);
+    -webkit-backdrop-filter:blur(var(--g-blur)) saturate(190%);
+    border:1px solid var(--g-border);
+    box-shadow:
+      0 24px 60px -18px rgba(0,0,0,.5),
+      0 2px 10px -4px rgba(0,0,0,.28),
+      inset 0 1px 0 0 var(--g-hi),
+      inset 0 -1px 0 0 rgba(255,255,255,.05);
+    padding:26px 22px 24px;
+  }
+  /* 卡片顶部斜向高光，玻璃感的关键 */
+  .glass::after{
+    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,0) 42%);
+    opacity:var(--g-sheen);
+  }
+  .glass > *{position:relative;z-index:2}
+
+  .brand{display:flex;align-items:center;gap:10px;margin-bottom:20px}
+  .logo{width:40px;height:40px;border-radius:13px;display:grid;place-items:center;
+    background:linear-gradient(140deg,#5EEAD4,#14B8A6);
+    box-shadow:0 6px 16px -6px rgba(20,184,166,.75), inset 0 1px 0 rgba(255,255,255,.5);
+    font-size:19px}
+  .brand-txt small{display:block;font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--fg-mut);font-family:var(--latin);font-weight:600}
+  .brand-txt span{font-size:13px;font-weight:600;color:var(--fg)}
+
+  .title{font-family:var(--font-display);font-weight:var(--title-weight);
+    font-size:27px;line-height:1.24;letter-spacing:var(--title-track);color:var(--fg)}
+  .subtitle{font-size:12px;color:var(--fg-mut);margin-top:8px;letter-spacing:.06em;
+    font-family:var(--font-body);font-weight:400}
+  .rule{height:1px;margin:20px 0 22px;background:linear-gradient(90deg,var(--g-border),transparent)}
+
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:11px;letter-spacing:.14em;color:var(--fg-mut);
+    margin-bottom:7px;font-family:var(--font-body);text-transform:uppercase;font-weight:500}
+  .input{display:flex;align-items:center;gap:10px;height:50px;padding:0 14px;
+    border-radius:14px;background:var(--in-bg);border:1px solid var(--in-bd);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    transition:border-color .18s, box-shadow .18s, background .18s}
+  .input.focus{border-color:rgba(94,234,212,.75);
+    box-shadow:0 0 0 3px rgba(20,184,166,.22), inset 0 1px 0 rgba(255,255,255,.14);
+    background:var(--in-bg-focus)}
+  .input .ic{width:18px;height:18px;flex:0 0 auto;opacity:.72;color:var(--fg)}
+  .input .ic svg{display:block;width:100%;height:100%}
+  .input .val{font-size:14.5px;color:var(--fg);font-family:var(--font-body);letter-spacing:.02em}
+  .input .val.mono{font-family:var(--latin);letter-spacing:.14em;font-size:15px}
+  .input input{flex:1;background:none;border:0;outline:none;color:var(--fg);font:inherit;
+    font-size:14.5px;font-family:var(--font-body);width:100%}
+  .input input::placeholder{color:var(--fg-mut)}
+  .eye{opacity:.55;font-size:14px;cursor:pointer;user-select:none}
+
+  .row{display:flex;align-items:center;justify-content:space-between;margin:6px 0 20px;
+    font-size:12px;color:var(--fg-mut);font-family:var(--font-body)}
+  .row a{color:var(--fg);text-decoration:none;opacity:.75}
+
+  .btn{width:100%;height:52px;border:0;border-radius:14px;cursor:pointer;
+    font-size:15px;font-weight:600;letter-spacing:.28em;color:#02211E;
+    font-family:var(--font-body);
+    background:linear-gradient(135deg,#5EEAD4,#14B8A6 62%,#0D9488);
+    box-shadow:0 12px 26px -10px rgba(20,184,166,.85), inset 0 1px 0 rgba(255,255,255,.55);
+    transition:transform .14s, box-shadow .2s;text-indent:.28em}
+  .btn:active{transform:translateY(1px);box-shadow:0 6px 14px -8px rgba(20,184,166,.8)}
+  .btn.ghost{background:var(--in-bg);color:var(--fg);border:1px solid var(--g-border);
+    box-shadow:none;letter-spacing:.2em}
+
+  .hint{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:7px;
+    font-size:11.5px;color:var(--fg-mut);letter-spacing:.03em;font-family:var(--font-body)}
+  .hint i{font-style:normal;font-family:var(--latin);color:var(--fg);opacity:.85;
+    background:var(--chip-bg);border:1px solid var(--chip-bd);padding:1px 6px;border-radius:6px;
+    font-size:11px}
+
+  /* ---------- 主题变量：深色玻璃 ---------- */
+  .screen.dark{
+    --fg:#EAF6F4; --fg-mut:rgba(226,242,240,.62);
+    --g-bg:rgba(255,255,255,.115); --g-border:rgba(255,255,255,.26);
+    --g-hi:rgba(255,255,255,.4); --g-sheen:.85;
+    --in-bg:rgba(255,255,255,.075); --in-bd:rgba(255,255,255,.16);
+    --in-bg-focus:rgba(255,255,255,.12);
+    --chip-bg:rgba(255,255,255,.1); --chip-bd:rgba(255,255,255,.2);
+    color:var(--fg);
+  }
+  /* ---------- 主题变量：浅色玻璃 ---------- */
+  .screen.light{
+    --fg:#0E2724; --fg-mut:rgba(16,42,39,.6);
+    --g-bg:rgba(255,255,255,.52); --g-border:rgba(255,255,255,.92);
+    --g-hi:rgba(255,255,255,.95); --g-sheen:.95;
+    --in-bg:rgba(255,255,255,.5); --in-bd:rgba(255,255,255,.85);
+    --in-bg-focus:rgba(255,255,255,.72);
+    --chip-bg:rgba(255,255,255,.55); --chip-bd:rgba(255,255,255,.85);
+    color:var(--fg);
+  }
+  .screen.light .grain{opacity:.16}
+  .screen.light .blob{opacity:.72;filter:blur(52px)}
+
+  /* ---------- 背景配色方案 ---------- */
+  .p-teal.dark{--bg-base:linear-gradient(165deg,#04211F,#062B28 45%,#0A3A36);
+    --bl1:radial-gradient(circle at 30% 30%,#14B8A6,#0D9488);
+    --bl2:radial-gradient(circle at 70% 30%,#0EA5E9,#0369A1);
+    --bl3:radial-gradient(circle at 40% 60%,#5EEAD4,#14B8A6);
+    --bl4:radial-gradient(circle at 50% 50%,#2DD4BF,#0F766E);}
+  .p-teal.light{--bg-base:linear-gradient(165deg,#EAFBF7,#DDF5F1 55%,#CFEFEA);
+    --bl1:radial-gradient(circle at 30% 30%,#5EEAD4,#A7F3D0);
+    --bl2:radial-gradient(circle at 70% 30%,#7BB7FF,#BFE3FF);
+    --bl3:radial-gradient(circle at 40% 60%,#CCFBF1,#99F6E4);
+    --bl4:radial-gradient(circle at 50% 50%,#A7F3D0,#5EEAD4);}
+
+  .p-dusk.dark{--bg-base:linear-gradient(165deg,#0E0A20,#171033 50%,#1D1340);
+    --bl1:radial-gradient(circle at 30% 30%,#7C5CF0,#4C1D95);
+    --bl2:radial-gradient(circle at 70% 30%,#E2683B,#9A3412);
+    --bl3:radial-gradient(circle at 40% 60%,#2F7FF0,#1E3A8A);
+    --bl4:radial-gradient(circle at 50% 50%,#A78BFA,#6D28D9);}
+  .p-dusk.light{--bg-base:linear-gradient(165deg,#F4F0FF,#EDE6FF 55%,#E4DAFF);
+    --bl1:radial-gradient(circle at 30% 30%,#C4B5FD,#DDD6FE);
+    --bl2:radial-gradient(circle at 70% 30%,#FFD3C4,#FFE4D6);
+    --bl3:radial-gradient(circle at 40% 60%,#BFE3FF,#DBEAFE);
+    --bl4:radial-gradient(circle at 50% 50%,#E6DBFF,#C4B5FD);}
+
+  .p-mist.dark{--bg-base:linear-gradient(165deg,#04121F,#062033 50%,#08304A);
+    --bl1:radial-gradient(circle at 30% 30%,#2F7FF0,#1D4ED8);
+    --bl2:radial-gradient(circle at 70% 30%,#38BDF8,#0369A1);
+    --bl3:radial-gradient(circle at 40% 60%,#5EEAD4,#0F766E);
+    --bl4:radial-gradient(circle at 50% 50%,#7BB7FF,#3B82F6);}
+  .p-mist.light{--bg-base:linear-gradient(165deg,#EBF4FF,#DFEDFF 55%,#D6E8FF);
+    --bl1:radial-gradient(circle at 30% 30%,#BFE3FF,#DBEAFE);
+    --bl2:radial-gradient(circle at 70% 30%,#CCFBF1,#A7F3D0);
+    --bl3:radial-gradient(circle at 40% 60%,#7BB7FF,#BFE3FF);
+    --bl4:radial-gradient(circle at 50% 50%,#A7F3D0,#5EEAD4);}
+
+  .p-dawn.dark{--bg-base:linear-gradient(165deg,#1F0F04,#2C1706 50%,#3A2008);
+    --bl1:radial-gradient(circle at 30% 30%,#E08A1E,#B45309);
+    --bl2:radial-gradient(circle at 70% 30%,#E2683B,#9A3412);
+    --bl3:radial-gradient(circle at 40% 60%,#0EA5A4,#0F766E);
+    --bl4:radial-gradient(circle at 50% 50%,#FBBF24,#D97706);}
+  .p-dawn.light{--bg-base:linear-gradient(165deg,#FFF7EA,#FFEFD9 55%,#FFE7C9);
+    --bl1:radial-gradient(circle at 30% 30%,#FFE08A,#FDE68A);
+    --bl2:radial-gradient(circle at 70% 30%,#FFD3C4,#FFE4D6);
+    --bl3:radial-gradient(circle at 40% 60%,#CCFBF1,#A7F3D0);
+    --bl4:radial-gradient(circle at 50% 50%,#FFB347,#FCD34D);}
+
+  /* ---------- 字体配对 ---------- */
+  .f-serif{--font-display:'Source Han Serif SC','Noto Serif SC','Songti SC','STSong','SimSun',serif;
+    --font-body:'PingFang SC','Microsoft YaHei UI','Microsoft YaHei',sans-serif;
+    --title-weight:700;--title-track:.02em}
+  .f-sans{--font-display:'Source Han Sans SC','PingFang SC','Microsoft YaHei UI','Microsoft YaHei',sans-serif;
+    --font-body:'PingFang SC','Microsoft YaHei UI','Microsoft YaHei',sans-serif;
+    --title-weight:800;--title-track:.05em}
+  .f-light{--font-display:'PingFang SC','Noto Sans CJK SC','Source Han Sans SC','Microsoft YaHei Light','Microsoft YaHei UI Light',sans-serif;
+    --font-body:'PingFang SC','Microsoft YaHei UI','Microsoft YaHei',sans-serif;
+    --title-weight:300;--title-track:.12em}
+  .f-deng{--font-display:'DengXian Light','等线 Light','DengXian','等线','PingFang SC','Microsoft YaHei UI',sans-serif;
+    --font-body:'DengXian','等线','PingFang SC','Microsoft YaHei UI',sans-serif;
+    --title-weight:300;--title-track:.08em}
+  .f-geo{--font-display:'Outfit','Source Han Sans SC','PingFang SC','Microsoft YaHei UI',sans-serif;
+    --font-body:'PingFang SC','Microsoft YaHei UI','Microsoft YaHei',sans-serif;
+    --title-weight:600;--title-track:.01em}
+
+  /* ---------- 右侧控制面板 ---------- */
+  .panel{flex:1 1 420px;min-width:400px;display:flex;flex-direction:column;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--page-line);border-radius:16px;padding:18px 18px 20px}
+  .card h3{font-size:13px;font-weight:600;letter-spacing:.08em;color:var(--page-fg);
+    display:flex;align-items:center;gap:8px;margin-bottom:14px}
+  .card h3::before{content:'';width:3px;height:13px;border-radius:2px;background:var(--accent)}
+  .card h3 span{font-weight:400;font-size:11px;color:var(--page-mut);letter-spacing:0}
+  .seg{display:flex;gap:8px;flex-wrap:wrap}
+  .seg button{flex:1 1 auto;min-width:78px;padding:9px 10px;border-radius:11px;cursor:pointer;
+    background:rgba(255,255,255,.045);border:1px solid var(--page-line);color:var(--page-mut);
+    font-size:12.5px;font-family:inherit;transition:.16s}
+  .seg button:hover{border-color:rgba(255,255,255,.22);color:var(--page-fg)}
+  .seg button.on{background:rgba(20,184,166,.16);border-color:rgba(94,234,212,.55);
+    color:#9FF3E6;box-shadow:0 0 0 1px rgba(94,234,212,.12)}
+  .swatches{display:flex;gap:10px;flex-wrap:wrap}
+  .sw{width:66px;height:46px;border-radius:11px;cursor:pointer;border:1px solid var(--page-line);
+    position:relative;overflow:hidden;transition:.16s}
+  .sw:hover{transform:translateY(-2px)}
+  .sw.on{border-color:rgba(94,234,212,.7);box-shadow:0 0 0 2px rgba(20,184,166,.22)}
+  .sw small{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:9.5px;
+    color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);letter-spacing:.04em}
+  .slider{display:flex;align-items:center;gap:12px;margin-top:12px}
+  .slider label{font-size:12px;color:var(--page-mut);width:86px;flex:0 0 auto}
+  .slider input[type=range]{flex:1;accent-color:var(--accent);height:3px}
+  .slider output{font-family:var(--latin);font-size:12px;color:var(--page-fg);width:56px;
+    text-align:right;font-variant-numeric:tabular-nums}
+  pre{background:#07090d;border:1px solid var(--page-line);border-radius:12px;padding:14px 16px;
+    font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-size:11.5px;line-height:1.75;
+    color:#a5d6cd;overflow:auto;max-height:260px;white-space:pre}
+  pre .k{color:#7dd3fc}.pre-note{font-size:11.5px;color:var(--page-mut);margin-top:10px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--page-line);vertical-align:top}
+  th{color:var(--page-mut);font-weight:500;font-size:11px;letter-spacing:.08em}
+  td b{color:#9FF3E6;font-weight:600}
+  code{font-family:ui-monospace,Consolas,monospace;font-size:11px;background:rgba(255,255,255,.06);
+    padding:1px 5px;border-radius:5px;color:#9FF3E6}
+  .foot{margin-top:34px;color:var(--page-mut);font-size:11.5px;border-top:1px solid var(--page-line);
+    padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="badge">UI Preview · 未改动 Flutter 代码</div>
+    <h1>教师端登录页 · 毛玻璃改造预览</h1>
+    <p>左边是当前线上版，右边是可实时调参的新版。调到你满意后把右下角的参数贴给我，我按这套数值改 <code>login_screen.dart</code>。</p>
+  </header>
+
+  <div class="stage">
+    <!-- ============ 现状 ============ -->
+    <div class="phone-col">
+      <div class="phone-label"><b>现状</b> · 当前 login_screen.dart</div>
+      <div class="phone">
+        <div class="screen" style="background:#F4F8F8">
+          <div class="notch" style="background:#12171d"></div>
+          <div class="status" style="color:#102A27"><span>11:19</span><span>5G ▮▮▮</span></div>
+          <div style="position:absolute;inset:0;overflow:hidden">
+            <div style="height:180px;background:linear-gradient(135deg,#14B8A6,rgba(20,184,166,.7));
+              padding:56px 24px 0;display:flex;justify-content:flex-end">
+              <div class="icon-btn" style="--chip-bg:rgba(255,255,255,.18);--chip-bd:rgba(255,255,255,.25);--fg:#fff">⚙</div>
+            </div>
+            <div style="margin:-20px 24px 0;background:#fff;border-radius:16px;padding:24px;
+              box-shadow:0 2px 6px rgba(15,31,27,.06)">
+              <div style="font-size:22px;font-weight:800;color:#102A27;letter-spacing:.02em">教师端登录</div>
+              <div style="font-size:14px;color:#5B6F6C;margin-top:4px">哈哈龙康复 · 康复管理系统</div>
+              <div style="margin-top:24px">
+                <div style="font-size:11px;color:#5B6F6C;margin-bottom:5px">工号 / 手机号</div>
+                <div style="height:50px;background:#F0F6F5;border-radius:12px;display:flex;align-items:center;
+                  gap:10px;padding:0 16px;color:#5B6F6C">
+                  <span>👤</span><span style="color:#102A27;font-size:14px">teacher</span>
+                </div>
+              </div>
+              <div style="margin-top:16px">
+                <div style="font-size:11px;color:#5B6F6C;margin-bottom:5px">密码</div>
+                <div style="height:50px;background:#F0F6F5;border-radius:12px;display:flex;align-items:center;
+                  gap:10px;padding:0 16px;color:#5B6F6C">
+                  <span>🔒</span><span style="font-size:14px;letter-spacing:2px">••••••</span>
+                </div>
+              </div>
+              <div style="margin-top:24px;height:48px;border-radius:12px;background:#14B8A6;color:#fff;
+                display:grid;place-items:center;font-size:14px;font-weight:600;letter-spacing:.1em">登 录</div>
+              <div style="margin-top:12px;text-align:center;font-size:12px;color:#5B6F6C">演示账号：teacher / 123456</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 新版 ============ -->
+    <div class="phone-col">
+      <div class="phone-label"><b>新版 · 毛玻璃</b> · 可实时调参</div>
+      <div class="phone">
+        <div id="screen" class="screen dark p-teal f-serif"
+             style="--g-radius:28px;--g-blur:24px;--g-opacity:.115;--g-border-a:.26">
+          <div class="bg"></div>
+          <div class="blob b1"></div><div class="blob b2"></div>
+          <div class="blob b3"></div><div class="blob b4"></div>
+          <div class="grain"></div>
+          <div class="notch"></div>
+          <div class="status"><span>11:19</span><span>5G ▮▮▮</span></div>
+
+          <div class="content">
+            <div class="topbar">
+              <div class="icon-btn" id="themeBtn" title="切换明暗">☾</div>
+            </div>
+            <div class="spacer"></div>
+
+            <div class="glass">
+              <div class="brand">
+                <div class="logo">✦</div>
+                <div class="brand-txt">
+                  <small>HA HA LONG</small>
+                  <span>哈哈龙康复</span>
+                </div>
+              </div>
+
+              <div class="title">教师端登录</div>
+              <div class="subtitle">康复管理系统 · 教师工作台</div>
+              <div class="rule"></div>
+
+              <div class="field">
+                <label>工号 / 手机号</label>
+                <div class="input" id="in1">
+                  <span class="ic">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c.9-3.6 3.9-5.6 7.5-5.6S18.6 16.4 19.5 20"/>
+                    </svg>
+                  </span>
+                  <input value="teacher" spellcheck="false">
+                </div>
+              </div>
+
+              <div class="field">
+                <label>密码</label>
+                <div class="input" id="in2">
+                  <span class="ic">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="4.5" y="10.5" width="15" height="9.5" rx="2.6"/>
+                      <path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>
+                    </svg>
+                  </span>
+                  <input type="password" value="123456" class="mono" spellcheck="false">
+                  <span class="eye">◉</span>
+                </div>
+              </div>
+
+              <div class="row"><span></span><a href="#">忘记密码？</a></div>
+
+              <button class="btn">登 录</button>
+            </div>
+
+            <div class="spacer"></div>
+            <div class="foot-note">继续即表示同意《服务条款》与《隐私政策》</div>
+          </div>
+          <div class="homebar"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 控制面板 ============ -->
+    <div class="panel">
+      <div class="card">
+        <h3>玻璃质感 <span>实时生效</span></h3>
+        <div class="seg" style="margin-bottom:6px">
+          <button id="mDark" class="on">深色玻璃</button>
+          <button id="mLight">浅色玻璃</button>
+        </div>
+        <div class="slider">
+          <label>模糊强度</label>
+          <input type="range" id="blur" min="0" max="48" value="24">
+          <output id="blurV">24px</output>
+        </div>
+        <div class="slider">
+          <label>玻璃不透明度</label>
+          <input type="range" id="opa" min="2" max="60" value="11.5">
+          <output id="opaV">0.115</output>
+        </div>
+        <div class="slider">
+          <label>描边强度</label>
+          <input type="range" id="bd" min="0" max="70" value="26">
+          <output id="bdV">0.26</output>
+        </div>
+        <div class="slider">
+          <label>卡片圆角</label>
+          <input type="range" id="rad" min="12" max="40" value="28">
+          <output id="radV">28px</output>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>背景配色 <span>磨砂需要饱和底色才出效果</span></h3>
+        <div class="swatches">
+          <div class="sw p-teal on" data-bg="p-teal" style="background:linear-gradient(140deg,#0A3A36,#14B8A6,#0EA5E9)"><small>品牌青</small></div>
+          <div class="sw p-mist" data-bg="p-mist" style="background:linear-gradient(140deg,#08304A,#2F7FF0,#38BDF8)"><small>晨雾蓝</small></div>
+          <div class="sw p-dusk" data-bg="p-dusk" style="background:linear-gradient(140deg,#1D1340,#7C5CF0,#E2683B)"><small>暮山紫</small></div>
+          <div class="sw p-dawn" data-bg="p-dawn" style="background:linear-gradient(140deg,#3A2008,#E08A1E,#FBBF24)"><small>暖阳橙</small></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>字体配对 <span>标题 / 正文</span></h3>
+        <div class="seg" id="fontSeg">
+          <button data-f="f-serif">雅致衬线</button>
+          <button data-f="f-sans">现代黑体</button>
+          <button class="on" data-f="f-light">轻盈细线</button>
+          <button data-f="f-deng">等线简约</button>
+          <button data-f="f-geo">几何英文</button>
+        </div>
+        <div class="pre-note" id="fontDesc">
+          标题：苹方 / 微软雅黑 Light，字重 300 + 大字距 0.12em —— 轻盈通透，最配毛玻璃。
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>当前参数 <span>直接贴给我即可</span></h3>
+        <pre id="spec"></pre>
+      </div>
+
+      <div class="card">
+        <h3>字体方案 <span>商用授权 / 打包成本</span></h3>
+        <table>
+          <tr><th>用途</th><th>推荐字体</th><th>授权 / 体积</th></tr>
+          <tr>
+            <td>标题（<b>已采纳</b>）</td>
+            <td><b>轻盈细线</b>：系统字体候选链 + 字重 300 + 字距 0.12em<br><span style="color:#8b949e">iOS PingFang SC Light / Windows 微软雅黑 Light / Android 系统黑体</span></td>
+            <td><b>0 体积</b>。链内全是黑体，不存在「衬线退化成黑体」的类别翻转；代价是 Android 上「细」可能不彻底</td>
+          </tr>
+          <tr>
+            <td>标题（未采纳·备选）</td>
+            <td>思源宋体 Source Han Serif SC 700<br><span style="color:#8b949e">要打包字体才稳</span></td>
+            <td>OFL 免费商用；单字重 9–16 MB，<b>必须子集化</b>（常用 3500 字 ≈ 600 KB）。不打包则依赖 ROM 自带衬线，风险较高</td>
+          </tr>
+          <tr>
+            <td>正文 / 控件</td>
+            <td><b>MiSans</b> 或 <b>HarmonyOS Sans SC</b><br><span style="color:#8b949e">备选：思源黑体 Regular/Medium</span></td>
+            <td>小米 / 华为均<b>免费商用</b>；3 个字重约 12 MB，子集化后约 1.5 MB</td>
+          </tr>
+          <tr>
+            <td>数字 / 英文点缀</td>
+            <td><b>Outfit</b>、Playfair Display</td>
+            <td>OFL；Latin 子集每字重仅 20–40 KB，可整包内嵌</td>
+          </tr>
+        </table>
+        <div class="pre-note">
+          Flutter 落地：把 ttf/woff2 放进 <code>teacher_app/assets/fonts/</code>，在 <code>pubspec.yaml</code> 的
+          <code>fonts:</code> 段声明 family 名，再把 family 名放到 <code>AppFontFamily</code> 候选链首位。
+          <b>不要用 google_fonts 运行时下载</b>——App 首屏会因网络失败退化成默认字体。<br>
+          已清理：<code>assets/fonts/NotoSansSC-Regular.otf</code>（16 MB）原先只登记在 <code>assets:</code> 里、
+          没在 <code>fonts:</code> 段声明 family，属于「打进包却用不上」的死重，已删除。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    预览页为纯前端模拟（Flutter 的 <code>BackdropFilter</code> 与 CSS <code>backdrop-filter</code> 观感基本一致，
+    sigma ≈ CSS 模糊值 ÷ 2）。确认无误后我再改 <code>teacher_app/lib/features/auth/login_screen.dart</code>。
+  </div>
+</div>
+
+<script>
+(function(){
+  var screen = document.getElementById('screen');
+  var st = { mode:'dark', bg:'p-teal', font:'f-light', blur:24, opa:0.115, bd:0.26, rad:28 };
+  var fontDesc = {
+    'f-serif':'标题：思源宋体 / 宋体类衬线 700。最省事的「高级感」配方，但候选链里的 Noto Serif CJK 属于「衬线类别」，少数 ROM 没带时会整条落到黑体 —— 字体类别会翻转，Android 上观感最不可控。',
+    'f-sans' :'标题：思源黑体 / 苹方 800，字距 +0.05em —— 沉稳、机构感强，最贴近政务医疗向产品的气质。',
+    'f-light':'标题：苹方 / 微软雅黑 Light，字重 300 + 大字距 0.12em。整条候选链都是黑体，三端不会出现字体类别翻转；Android 落到系统默认黑体，若该 ROM 只带 Regular/Bold 则「细」得不彻底（变常规字重），但不会变字体。低 DPI 屏上细笔画略发虚，这是唯一代价。',
+    'f-deng' :'标题与正文：等线 / DengXian —— Windows 自带的现代字，笔画干净，零打包成本，但 iOS 上没有。',
+    'f-geo'  :'标题：Outfit 600（拉丁）+ 思源黑体 —— 英文与数字质感最好，中文回退到黑体，适合品牌感更强的方向。'
+  };
+  // 与 design_tokens.dart / login_screen.dart 的落地值一一对应
+  var fontDart = {
+    'f-serif':'AppFontFamily.serifCjk',  'f-sans':'AppFontFamily.sansCjk',
+    'f-light':'AppFontFamily.thinSansCjk','f-deng':'AppFontFamily.sansCjk',
+    'f-geo':'AppFontFamily.sansCjk'
+  };
+  var titleSpec = {
+    'f-serif':'AppFontWeight.bold /   0.6', 'f-sans':'AppFontWeight.extrabold / 1.4',
+    'f-light':'AppFontWeight.light /  3.0', 'f-deng':'AppFontWeight.light /  2.2',
+    'f-geo':'AppFontWeight.semibold / 0.3'
+  };
+
+  function render(){
+    screen.className = 'screen ' + st.mode + ' ' + st.bg + ' ' + st.font;
+    var cs = screen.style;
+    cs.setProperty('--g-radius', st.rad + 'px');
+    cs.setProperty('--g-blur', st.blur + 'px');
+    cs.setProperty('--g-bg', 'rgba(255,255,255,' + st.opa.toFixed(3) + ')');
+    cs.setProperty('--g-border', 'rgba(255,255,255,' + st.bd.toFixed(2) + ')');
+    document.getElementById('blurV').textContent = st.blur + 'px';
+    document.getElementById('opaV').textContent = st.opa.toFixed(3);
+    document.getElementById('bdV').textContent = st.bd.toFixed(2);
+    document.getElementById('radV').textContent = st.rad + 'px';
+    document.getElementById('fontDesc').textContent = fontDesc[st.font];
+
+    var isDark = st.mode === 'dark';
+    document.getElementById('spec').innerHTML =
+      '// login_screen.dart  \u2014\u2014  ' + (isDark ? '深色玻璃' : '浅色玻璃') + '\n'
+    + 'ClipRRect(borderRadius: BorderRadius.circular(' + st.rad + '))\n'
+    + '  BackdropFilter(\n'
+    + '    filter: ImageFilter.blur(sigmaX: ' + (st.blur/2).toFixed(1) + ', sigmaY: ' + (st.blur/2).toFixed(1) + '),\n'
+    + '    child: Container(\n'
+    + '      decoration: BoxDecoration(\n'
+    + '        color: Colors.white.withOpacity(' + st.opa.toFixed(3) + '),   // 玻璃底色\n'
+    + '        borderRadius: BorderRadius.circular(' + st.rad + '),\n'
+    + '        border: Border.all(\n'
+    + '          color: Colors.white.withOpacity(' + st.bd.toFixed(2) + '), width: 1),\n'
+    + '        boxShadow: [\n'
+    + '          BoxShadow(color: Color(0x80000000), blurRadius: 60, offset: Offset(0,24)),\n'
+    + '        ],\n'
+    + '      ),\n'
+    + '      child: ...,  // 内容\n'
+    + '    ),\n'
+    + '  )\n'
+    + '\n// 背景配色：' + st.bg.replace('p-','') + '\n'
+    + '// 字体配对：' + st.font.replace('f-','') + '\n'
+    + '// 标题：fontFamilyFallback = ' + fontDart[st.font] + ',' + '\n'
+    + '//       fontWeight = ' + titleSpec[st.font].split('/')[0].trim()
+    + '  letterSpacing = ' + titleSpec[st.font].split('/')[1].trim() + '\n'
+    + '// 卡片圆角 ' + st.rad + ' / 模糊 ' + st.blur + ' / 底色 ' + st.opa.toFixed(3) + ' / 描边 ' + st.bd.toFixed(2);
+  }
+
+  function segSel(id, fn){
+    var box = document.getElementById(id);
+    box.addEventListener('click', function(e){
+      var b = e.target.closest('button'); if(!b) return;
+      Array.prototype.forEach.call(box.querySelectorAll('button'), function(x){ x.classList.remove('on'); });
+      b.classList.add('on'); fn(b);
+    });
+  }
+
+  segSel('fontSeg', function(b){ st.font = b.dataset.f; render(); });
+
+  // 明暗两套玻璃有各自的合理默认值：深色玻璃要更透、描边更弱；浅色玻璃要更实、描边更亮
+  var PRESET = { dark:{opa:11.5, bd:26}, light:{opa:52, bd:85} };
+  function applyPreset(){
+    var p = PRESET[st.mode];
+    st.opa = p.opa/100; st.bd = p.bd/100;
+    document.getElementById('opa').value = p.opa;
+    document.getElementById('bd').value = p.bd;
+  }
+  document.getElementById('mDark').addEventListener('click', function(){
+    st.mode = 'dark'; this.classList.add('on');
+    document.getElementById('mLight').classList.remove('on');
+    document.getElementById('themeBtn').textContent = '☾';
+    document.querySelector('.notch').style.background = '#12171d';
+    applyPreset(); render();
+  });
+  document.getElementById('mLight').addEventListener('click', function(){
+    st.mode = 'light'; this.classList.add('on');
+    document.getElementById('mDark').classList.remove('on');
+    document.getElementById('themeBtn').textContent = '☀';
+    document.querySelector('.notch').style.background = '#e8f2f0';
+    applyPreset(); render();
+  });
+
+  document.querySelectorAll('.sw').forEach(function(sw){
+    sw.addEventListener('click', function(){
+      document.querySelectorAll('.sw').forEach(function(x){ x.classList.remove('on'); });
+      sw.classList.add('on'); st.bg = sw.dataset.bg; render();
+    });
+  });
+
+  [['blur','blur'],['opa','opa'],['bd','bd'],['rad','rad']].forEach(function(p){
+    var el = document.getElementById(p[0]);
+    el.addEventListener('input', function(){
+      var v = parseFloat(el.value);
+      st[p[1]] = (p[1] === 'opa') ? v/100 : (p[1] === 'bd' ? v/100 : v);
+      if(p[1] === 'opa') st.opa = v/100;
+      render();
+    });
+  });
+
+  // 输入框聚焦光晕演示
+  document.querySelectorAll('.input').forEach(function(i){
+    i.addEventListener('click', function(){ i.classList.add('focus'); });
+  });
+  document.addEventListener('click', function(e){
+    if(!e.target.closest('.input'))
+      document.querySelectorAll('.input').forEach(function(i){ i.classList.remove('focus'); });
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

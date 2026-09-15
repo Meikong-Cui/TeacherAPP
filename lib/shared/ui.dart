@@ -167,7 +167,21 @@ Color iconColor(String key) {
 
 /// 主题切换按钮（亮/暗/跟随系统 循环）。
 class ThemeToggleButton extends ConsumerWidget {
-  const ThemeToggleButton({super.key});
+  const ThemeToggleButton({
+    super.key,
+    this.iconSize,
+    this.color,
+    this.dense = false,
+  });
+
+  /// 图标尺寸，null 用 IconButton 默认值。
+  final double? iconSize;
+
+  /// 图标颜色，null 用主题默认（跟随 IconTheme）。
+  final Color? color;
+
+  /// 紧凑模式：去掉内边距并把命中区压到 38×38，用于放进玻璃胶囊里。
+  final bool dense;
 
   IconData _icon(ThemeMode mode) {
     switch (mode) {
@@ -185,6 +199,12 @@ class ThemeToggleButton extends ConsumerWidget {
     final ThemeMode mode = ref.watch(themeModeProvider);
     return IconButton(
       icon: Icon(_icon(mode)),
+      iconSize: iconSize,
+      color: color,
+      padding: dense ? EdgeInsets.zero : null,
+      constraints: dense
+          ? const BoxConstraints.tightFor(width: 38, height: 38)
+          : null,
       tooltip: '主题：${mode.name}',
       onPressed: () => ref.read(themeModeProvider.notifier).cycle(),
     );

@@ -107,7 +107,7 @@ class ProfileScreen extends ConsumerWidget {
             SoftCard(
               onTap: () => showAboutDialog(
                 context: context,
-                applicationName: '语亦丰康复教师端',
+                applicationName: '哈哈龙康复教师端',
                 applicationVersion: '1.0.0',
                 children: const <Widget>[
                   Text('儿童康复教育系统 · 教师端 App（Flutter）'),

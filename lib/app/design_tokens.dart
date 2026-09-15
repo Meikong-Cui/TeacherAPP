@@ -42,11 +42,64 @@ class AppFontSize {
 }
 
 class AppFontWeight {
+  static const FontWeight thin = FontWeight.w200;
+  /// 细体。登录页标题用（「轻盈细线」方案）。
+  static const FontWeight light = FontWeight.w300;
   static const FontWeight normal = FontWeight.w400;
   static const FontWeight medium = FontWeight.w500;
   static const FontWeight semibold = FontWeight.w600;
   static const FontWeight bold = FontWeight.w700;
   static const FontWeight extrabold = FontWeight.w800;
+}
+
+/// 字体族候选链（用于 `TextStyle.fontFamilyFallback`）。
+///
+/// 中文衬线/黑体的可用性随平台差异极大：
+/// iOS/macOS 自带 Songti SC / PingFang SC；Windows 只有 SimSun / 微软雅黑；
+/// Android 视厂商而定（多数带 Noto Serif CJK SC，少数只有思源黑体）。
+/// 所以这里给「候选链」而不是单一 family —— 取第一个命中的字体渲染，
+/// 全不命中时退回系统默认无衬线（不会崩，只是丢掉衬线气质）。
+///
+/// 若要三端观感完全一致，需把思源宋体子集化后放进 `assets/fonts/`，
+/// 在 pubspec 的 `fonts:` 段声明 family，再把该 family 名放到链首。
+class AppFontFamily {
+  /// 中文衬线（标题用）：思源宋体 → 苹方宋 → 系统宋体。
+  static const List<String> serifCjk = <String>[
+    'Source Han Serif SC',
+    'Noto Serif CJK SC',
+    'Noto Serif SC',
+    'Songti SC',
+    'STSong',
+    'SimSun',
+    'serif',
+  ];
+
+  /// 中文无衬线（正文 / 控件用）：思源黑体 → 苹方 → 微软雅黑。
+  static const List<String> sansCjk = <String>[
+    'Source Han Sans SC',
+    'Noto Sans CJK SC',
+    'PingFang SC',
+    'Microsoft YaHei UI',
+    'Microsoft YaHei',
+    'sans-serif',
+  ];
+
+  /// 中文细黑体（登录页标题用，「轻盈细线」方案）。
+  ///
+  /// 与 [serifCjk] 的关键差别：**整条链永远是黑体**，不存在「衬线退化成黑体」
+  /// 那种字体类别翻转。最坏情况只是「细」得不彻底：
+  /// - iOS：PingFang SC 自带 Light 面，w300 能实打实拿到细体。
+  /// - Android：落到系统默认黑体（Noto Sans CJK）。若该 ROM 只带 Regular/Bold
+  ///   两个字重，则渲染成 Regular —— 观感变常规，但不会变成另一种字体。
+  /// - Windows：微软雅黑 Light。
+  static const List<String> thinSansCjk = <String>[
+    'PingFang SC',
+    'Noto Sans CJK SC',
+    'Source Han Sans SC',
+    'Microsoft YaHei Light',
+    'Microsoft YaHei UI Light',
+    'sans-serif',
+  ];
 }
 
 class AppShadow {

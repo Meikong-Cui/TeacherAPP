@@ -1,5 +1,5 @@
 name: teacher_app
-description: "语亦丰儿童康复教育系统 - 教师端 App（Flutter）。含上下班签到（1km 围栏）与预留的 AI 教案生成接口。"
+description: "哈哈龙儿童康复教育系统 - 教师端 App（Flutter）。含上下班签到（1km 围栏）与预留的 AI 教案生成接口。"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -41,6 +41,9 @@ dependency_overrides:
 
 flutter:
   uses-material-design: true
+  # assets/fonts/ 暂不声明：目录内目前只有 .gitkeep（原本那个 16MB 的
+  # NotoSansSC-Regular.otf 只登记在 assets 里、没在 fonts: 段声明 family，
+  # 属于「打进包却用不上」的死重，已删除）。
+  # 将来把子集化的字体放进去时，走下面的 fonts: 段声明 family。
   assets:
-    - assets/fonts/
     - assets/images/hearing_symbols/

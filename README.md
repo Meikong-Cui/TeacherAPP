@@ -1,4 +1,4 @@
-# 语亦丰康复 · 教师端 App（Flutter）
+# 哈哈龙康复 · 教师端 App（Flutter）
 
 儿童康复教育系统的**教师端 App**，基于前端原型 `children-rehab-prototype/app.html` 的演示结构开发，使用 Flutter 3.44 + Riverpod + GoRouter 实现。
 
