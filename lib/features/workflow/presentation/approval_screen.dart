@@ -230,64 +230,12 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
     if (mounted) setState(() => _loading = false);
   }
 
-  Future<void> _act(WorkflowInstance item, bool pass) async {
-    String? comment;
-    if (!pass) {
-      comment = await _askComment(context, required: true);
-      if (comment == null) return; // 用户取消
-    } else {
-      comment = await _askComment(context, required: false);
-    }
-    if (!mounted) return;
-    try {
-      if (pass) {
-        await _repo.approve(item.id, comment);
-      } else {
-        await _repo.reject(item.id, comment);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(pass ? '已通过' : '已驳回')));
-      await _load();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('操作失败：$e')));
-    }
-  }
-
-  /// 弹出意见输入；[required] 为 true 时不允许空内容（驳回必填原因）。
-  /// 取消返回 null。
-  Future<String?> _askComment(BuildContext context, {bool required = false}) {
-    final TextEditingController ctl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: Text(required ? '驳回原因（必填）' : '审批意见（选填）'),
-        content: TextField(
-          controller: ctl,
-          maxLines: 3,
-          decoration: const InputDecoration(
-            hintText: '请输入…',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final String v = ctl.text.trim();
-              if (required && v.isEmpty) return;
-              Navigator.pop(ctx, v.isEmpty ? null : v);
-            },
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
+  /// 进审批详情页（业务单据 + 凭证大图 + 轨迹 + 通过/驳回）。
+  /// 详情页审批成功后 pop(true)，这里据此刷新列表。
+  Future<void> _open(WorkflowInstance item) async {
+    final bool? changed =
+        await context.push<bool>('/approval/detail', extra: item);
+    if (changed == true && mounted) await _load();
   }
 
   @override
@@ -318,8 +266,7 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
                           final WorkflowInstance it = _items[i];
                           return _ApprovalTile(
                             item: it,
-                            onApprove: () => _act(it, true),
-                            onReject: () => _act(it, false),
+                            onOpen: () => _open(it),
                           );
                         },
                       ),
@@ -328,19 +275,22 @@ class _ApprovalListScreenState extends State<ApprovalListScreen> {
   }
 }
 
+/// 待办卡片：整卡可点，进入详情页核对单据与凭证后再审批。
+///
+/// 这里**刻意不再放「通过 / 驳回」按钮** —— 审批人看不到附件（请款单与报销单的
+/// 金额只存在于凭证图片里）就直接点通过，是真实出现过的坑。
 class _ApprovalTile extends StatelessWidget {
   const _ApprovalTile({
     required this.item,
-    required this.onApprove,
-    required this.onReject,
+    required this.onOpen,
   });
   final WorkflowInstance item;
-  final VoidCallback onApprove;
-  final VoidCallback onReject;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context) {
     return SoftCard(
+      onTap: onOpen,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -384,23 +334,23 @@ class _ApprovalTile extends StatelessWidget {
                           fontSize: AppFontSize.small, color: AppPalette.ink)),
                 )),
           ],
-          const SizedBox(height: 10),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onReject,
-                  child: const Text('驳回'),
-                ),
+          const SizedBox(height: 8),
+          if (item.businessType != null && item.businessType!.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text(
+                '含业务单据与凭证附件，请进详情核对后再审批',
+                style: TextStyle(
+                    fontSize: AppFontSize.small, color: AppPalette.inkMute),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton(
-                  onPressed: onApprove,
-                  child: const Text('通过'),
-                ),
-              ),
-            ],
+            ),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.tonalIcon(
+              onPressed: onOpen,
+              icon: const Icon(Icons.visibility_outlined, size: 18),
+              label: const Text('查看详情'),
+            ),
           ),
         ],
       ),

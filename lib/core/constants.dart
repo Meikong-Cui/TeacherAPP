@@ -37,6 +37,14 @@ class AppConstants {
   /// TEACHER 提交、FINANCE/PRINCIPAL 审批）。
   static const String reimbursementPath = '/api/reimbursement';
 
+  /// 请款申请接口路径（后端 oa-fund 模块；审批链 申请人 → 财务 → 园长 → 出纳付款）。
+  /// 请款单不设金额字段，金额在购买凭证图片里，所以凭证必填。
+  static const String paymentApplyPath = '/api/finance/payment-apply';
+
+  /// 开票申请接口路径（后端 oa-fund 模块；审批链同上）。
+  /// 审批时后端会实时比对已通过的同名同额开票记录用于重复开票提示。
+  static const String invoiceApplyPath = '/api/finance/invoice-apply';
+
   /// 康复档案接口路径（后端 oa-rehab 模块；教师提交/查看，园长可审批）。
   static const String rehabPath = '/api/rehab';
 

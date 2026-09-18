@@ -78,6 +78,7 @@ class Reimbursement {
     this.approveTime,
     this.createTime,
     this.items = const <ReimbursementItem>[],
+    this.photos = const <String>[],
   });
 
   final String id;
@@ -93,6 +94,9 @@ class Reimbursement {
   final DateTime? approveTime;
   final DateTime? createTime;
   final List<ReimbursementItem> items;
+
+  /// 原始凭证图片（URL 列表）。审批人据此核对金额，必须能放大查看。
+  final List<String> photos;
 
   String get amountText => '¥${amount.toStringAsFixed(2)}';
 
@@ -118,6 +122,7 @@ class Reimbursement {
     DateTime? approveTime,
     DateTime? createTime,
     List<ReimbursementItem>? items,
+    List<String>? photos,
   }) =>
       Reimbursement(
         id: id ?? this.id,
@@ -133,6 +138,7 @@ class Reimbursement {
         approveTime: approveTime ?? this.approveTime,
         createTime: createTime ?? this.createTime,
         items: items ?? this.items,
+        photos: photos ?? this.photos,
       );
 
   factory Reimbursement.fromJson(Map<String, dynamic> json) {
@@ -163,6 +169,10 @@ class Reimbursement {
           ? null
           : DateTime.tryParse(json['createTime'].toString()),
       items: items,
+      photos: <String>[
+        for (final dynamic e in (json['photos'] as List?) ?? <dynamic>[])
+          if (e != null && e.toString().isNotEmpty) e.toString(),
+      ],
     );
   }
 }

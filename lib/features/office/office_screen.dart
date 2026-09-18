@@ -50,6 +50,25 @@ class OfficeScreen extends StatelessWidget {
         route: '/reimbursement/list',
         gradient: AppGradients.amber,
       ),
+      // 请款申请（采购 / 经费类支出）：审批链 申请人 → 财务 → 园长 → 出纳付款。
+      // 请款单**没有金额字段**，金额在购买凭证图片里，所以凭证是必填项。
+      const _OfficeEntry(
+        icon: Icons.request_quote_outlined,
+        label: '请款申请',
+        subtitle: '采购 / 经费',
+        route: '/office/payment-apply',
+        gradient: AppGradients.sky,
+      ),
+      // 开票申请：审批通过后由会计登记发票号与开票日期。
+      // 与网页端一致，仅财务 / 园长 / 管理员可见（开票是财务侧动作）。
+      const _OfficeEntry(
+        icon: Icons.receipt_outlined,
+        label: '开票申请',
+        subtitle: '提交审批',
+        route: '/office/invoice-apply',
+        gradient: AppGradients.purple,
+        roles: <String>['FINANCE', 'PRINCIPAL', 'ADMIN'],
+      ),
       const _OfficeEntry(
         icon: Icons.notifications_outlined,
         label: '消息通知',
@@ -70,7 +89,7 @@ class OfficeScreen extends StatelessWidget {
       const _OfficeEntry(
         icon: Icons.approval_outlined,
         label: '审批',
-        subtitle: '请假 / 补卡 / 报销',
+        subtitle: '请假 / 补卡 / 报销 / 请款',
         route: '/approval',
         gradient: AppGradients.teal,
         roles: <String>['FINANCE', 'PRINCIPAL', 'ADMIN'],

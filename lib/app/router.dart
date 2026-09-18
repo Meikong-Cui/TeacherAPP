@@ -21,6 +21,10 @@ import 'package:teacher_app/features/rehab/presentation/add_child_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/edit_child_screen.dart';
 import 'package:teacher_app/features/office/office_screen.dart';
 import 'package:teacher_app/features/workflow/presentation/approval_screen.dart';
+import 'package:teacher_app/features/workflow/presentation/approval_detail_screen.dart';
+import 'package:teacher_app/features/workflow/workflow_repository.dart';
+import 'package:teacher_app/features/finance_apply/presentation/payment_apply_screen.dart';
+import 'package:teacher_app/features/finance_apply/presentation/invoice_apply_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/autism_items_editor_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_archive_screen.dart';
 import 'package:teacher_app/features/rehab/presentation/offline_subitem_parser.dart';
@@ -388,6 +392,33 @@ final GoRouter appRouter = GoRouter(
           ApprovalListScreen(
         type: state.uri.queryParameters['type'] ?? '',
       ),
+    ),
+    // 审批详情：业务单据 + 凭证大图（可双指放大）+ 流程轨迹 + 通过/驳回。
+    // 列表卡片只留「查看详情」，避免审批人没核对凭证就直接点通过。
+    GoRoute(
+      path: '/approval/detail',
+      builder: (BuildContext context, GoRouterState state) {
+        final Object? extra = state.extra;
+        if (extra is WorkflowInstance) {
+          return ApprovalDetailScreen(instance: extra);
+        }
+        // 深链或热重启会丢掉 extra，给明确指引而不是白屏
+        return Scaffold(
+          appBar: AppBar(title: const Text('审批详情')),
+          body: const Center(child: Text('请从「办公 → 审批」列表进入本页')),
+        );
+      },
+    ),
+    // ── 财务请款 / 开票（教师端 ↔ OA 网页共通，后端 oa-fund）──
+    GoRoute(
+      path: '/office/payment-apply',
+      builder: (BuildContext context, GoRouterState state) =>
+          const PaymentApplyScreen(),
+    ),
+    GoRoute(
+      path: '/office/invoice-apply',
+      builder: (BuildContext context, GoRouterState state) =>
+          const InvoiceApplyScreen(),
     ),
     GoRoute(
       path: '/rehab-autism/:id/vb-home',

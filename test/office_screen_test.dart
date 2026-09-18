@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/features/office/office_screen.dart';
 
-/// 办公页入口的角色可见性（2026-09-03 审批功能）。
+/// 办公页入口的角色可见性（2026-09-03 审批功能；2026-09-18 补请款 / 开票）。
 ///
 /// 需求：办公页新增「审批」入口，仅 财务/园长/管理员 可见；
 /// 教师等其他角色完全看不到。此处用 widget 测试锁定该行为，
@@ -65,5 +65,31 @@ void main() {
     AuthStore.instance.roles = const <String>[];
     await pumpOffice(tester);
     expect(find.text('审批'), findsNothing);
+  });
+
+  // ── 财务新增：请款申请（全员）与开票申请（财务侧） ──────────────
+  // 请款单人人可发起（老师买教具也要报销式请款），开票是财务动作，故只有财务侧可见。
+
+  testWidgets('教师：可见「请款申请」，但看不到「开票申请」', (tester) async {
+    AuthStore.instance.roles = const <String>['TEACHER'];
+    await pumpOffice(tester);
+    expect(find.text('请款申请'), findsOneWidget);
+    expect(find.text('开票申请'), findsNothing);
+  });
+
+  testWidgets('财务：请款与开票入口都可见，审批副标题已含「请款」', (tester) async {
+    AuthStore.instance.roles = const <String>['FINANCE'];
+    await pumpOffice(tester);
+    expect(find.text('请款申请'), findsOneWidget);
+    expect(find.text('开票申请'), findsOneWidget);
+    expect(find.text('请假 / 补卡 / 报销 / 请款'), findsOneWidget);
+  });
+
+  testWidgets('园长/管理员：可见「开票申请」（与网页端一致）', (tester) async {
+    for (final String role in <String>['PRINCIPAL', 'ADMIN']) {
+      AuthStore.instance.roles = <String>[role];
+      await pumpOffice(tester);
+      expect(find.text('开票申请'), findsOneWidget, reason: 'role=$role');
+    }
   });
 }
