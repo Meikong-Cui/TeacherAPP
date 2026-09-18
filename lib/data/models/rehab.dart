@@ -1338,8 +1338,21 @@ class RehabTask {
         completedAt: _dt(j['completedAt']),
       );
 
-  String get typeLabel =>
-      reminderType == 'TEACHING_PLAN' ? '教学计划提醒' : '持续评估提醒';
+  /// 待办类型标签。
+  ///
+  /// 这是**白名单**式的：新类型不在下面登记就会落到默认分支、被显示成「持续评估提醒」
+  /// （回访预约的待办 2026-09-18 上线时就踩过这个坑 —— 园长派的回访在老师手机上
+  /// 显示成持续评估提醒）。新增 reminderType 时**必须**同步这里。
+  String get typeLabel {
+    switch (reminderType) {
+      case 'TEACHING_PLAN':
+        return '教学计划提醒';
+      case 'VISIT':
+        return '回访预约';
+      default:
+        return '持续评估提醒';
+    }
+  }
 }
 
 /// 听力图单点：频率(Hz) + 分贝值(dB)。
