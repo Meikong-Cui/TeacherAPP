@@ -367,6 +367,20 @@ class _EmptyChildHint extends StatelessWidget {
   }
 }
 
+/// 待办图标按类型区分。
+///
+/// 原先写死 `assessment_outlined`，于是园长派的**回访预约**在老师手机上配了个
+/// 「评估」图标 —— 图标与文案（回访预约）对不上，第一眼容易认成评估任务。
+/// 新增 `reminderType` 时**必须**同步这里（与 `RehabTask.typeLabel` 同一张白名单）。
+IconData _todoIcon(String reminderType) {
+  switch (reminderType) {
+    case 'VISIT':
+      return Icons.event_note_outlined;
+    default:
+      return Icons.assessment_outlined;
+  }
+}
+
 class _TodoTile extends StatelessWidget {
   const _TodoTile({required this.task, required this.onDone});
   final RehabTask task;
@@ -391,7 +405,7 @@ class _TodoTile extends StatelessWidget {
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
             alignment: Alignment.center,
-            child: Icon(Icons.assessment_outlined,
+            child: Icon(_todoIcon(task.reminderType),
                 color: overdue ? AppPalette.danger : AppPalette.warning,
                 size: 18),
           ),

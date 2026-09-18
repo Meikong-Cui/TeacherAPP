@@ -337,7 +337,14 @@ class _MiniTag extends StatelessWidget {
   }
 }
 
-/// 评估进度：显示最近的待办；通过 pendingTasksProvider + 自带的 archiveChildName 字段过滤。
+/// 评估进度：显示该儿童最近的待办。
+///
+/// 按 `archiveId` 从 pendingTasks 里挑出本档案的任务。**不能用 `archiveChildName`
+/// 过滤** —— `TaskReminder` 实体没有这个字段，后端也不下发（`RehabTask` 里那个
+/// 同名字段是历史遗留的死字段，恒为 null）。
+///
+/// 回访预约（VISIT）待办的 `archiveId` 是空串（后端已放开 NOT NULL），
+/// 因此天然不会混进这里 —— 它是「园长派给某位老师的活」，不属于某个儿童的评估进度。
 class _ProgressStrip extends ConsumerWidget {
   const _ProgressStrip({required this.archiveId, required this.tone});
   final String archiveId;
