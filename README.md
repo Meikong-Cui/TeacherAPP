@@ -122,10 +122,12 @@ flutter run            # 连接真机 / 模拟器（定位功能需真机或带�
 
 - **Android**：`android/app/src/main/AndroidManifest.xml` 已包含
   `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`
-- **iOS**：当前工程**尚未生成 `ios` 目录**（之前只产出了 Android 平台）。在 Mac 上
-  `flutter create --platforms=ios .` 生成 iOS 工程后，需补加定位权限描述到
-  `ios/Runner/Info.plist`（geolocator 必需，否则签到在 iOS 崩溃 / App Store 审核被拒）：
-  `NSLocationWhenInUseUsageDescription` / `NSLocationAlwaysAndWhenInUseUsageDescription`。
+- **iOS**：`ios/Runner/Info.plist` **已入库且配置齐全** —— 定位 / 相机 / 相册 / 麦克风四项
+  权限描述 + **ATS 明文 HTTP 例外** + 显示名「哈哈龙教师端」。⚠ 它是 iOS 侧**唯一**入库的
+  配置文件，每次从源码同步到 Mac 时**必须一起带过去**：漏了 ATS 例外 iOS 上连不上 HTTP 后端
+  （登录必失败），漏了 `NSMicrophoneUsageDescription` 小游戏一开就闪退。
+  iOS 的 Xcode 工程本体（`Runner.xcodeproj` / `Podfile` / `AppDelegate.swift`）**不在仓库里**，
+  由 Mac 上 `flutter create --platforms=ios .` 生成。
 - **Web**：定位需 HTTPS 或 localhost 环境
 
 ## 接口预留汇总
@@ -209,9 +211,13 @@ flutter build apk --release      # 若需发布包（需自签或上传密钥）
 
 ## 构建 iOS / 打包苹果应用（需在 Mac 上完成）
 
-> ⚠️ **iOS 打包无法在 Windows 完成**，必须在 macOS + Xcode 环境中进行。本工程当前**只有 Android 平台**，
-> `ios` 目录需在 Mac 上生成。Apple 生态的硬性门槛：**仅 iOS 模拟器可免费运行；真机安装 / TestFlight / 上架 App Store
-> 都必须有 Apple Developer 账号（个人 $99/年）**——租 Mac 不等于能免费把 App 装进 iPhone。
+> ⚠️ **iOS 打包无法在 Windows 完成**，必须在 macOS + Xcode 环境中进行。Apple 生态的硬性门槛：
+> **仅 iOS 模拟器可免费运行；真机安装 / TestFlight / 上架 App Store 都必须有 Apple Developer
+> 账号（个人 $99/年）**——租 Mac 不等于能免费把 App 装进 iPhone。
+>
+> **仓库里 `ios/` 只入库了一个文件 `ios/Runner/Info.plist`**（Xcode 工程本体不入库，见下方
+> 「同步到 Mac：哪些文件必须带」）。所以 Mac 上的 Xcode 工程是长期存在的本地工程，
+> 而 `Info.plist` 必须跟着源码一起更新。
 
 ### 一次性前置（Mac 上）
 - **Xcode**（App Store 免费下，需 Apple ID）+ Xcode Command Line Tools（`xcode-select --install`）
@@ -219,33 +225,73 @@ flutter build apk --release      # 若需发布包（需自签或上传密钥）
 - **CocoaPods**：`sudo gem install cocoapods` 或 `brew install cocoapods`
 - **Apple Developer 账号**（$99/年）：真机测试 / 分发 / 上架必需
 
-### 打包步骤
+### 同步到 Mac：哪些文件必须带
+
+只换 `lib/` **不够**。`lib/` 之外有 4 项会直接影响 iOS 包能否正常跑：
+
+| 路径 | 为什么必须带 |
+| --- | --- |
+| `pubspec.yaml` | assets 声明、依赖，以及 **`version: 1.0.0+1`（TestFlight 每次上传必须递增 build 号，就写在这里）** |
+| `pubspec.lock` | 已入库，锁死插件版本；不带则 Mac 会重新解析，可能装到与验证环境不同的版本 |
+| `ios/Runner/Info.plist` | **最关键**：ATS 明文 HTTP 例外 + 定位/相机/相册/麦克风权限描述 + 显示名 |
+| `assets/` | `assets/images/hearing_symbols/` 4 张符号图（`assets/fonts/` 已清空） |
+
+不影响打包的：`test/`（`flutter build` 不编译 test）、`README.md`、`design_preview/`、
+`IOS_INFO_PLIST_TEMPLATE.plist`（全库无引用）、`android/`。
+
 ```bash
-# 1. 把工程拷到 Mac（建议英文路径，如 ~/teacher_app），安装依赖
+# A. Mac 上的工程就是本仓库的 clone —— 推荐：一次拿全，且 pubspec.lock 一致
+git pull origin main
+
+# B. Mac 上是独立 flutter create 出来的工程 —— 至少要覆盖这五项
+#    lib/  pubspec.yaml  pubspec.lock  ios/Runner/Info.plist  assets/
+```
+
+> `ios/` 只入库了 `Info.plist`，所以 `git pull` **不会**动你的 Xcode 工程，可以放心 pull。
+
+### 打包步骤
+
+```bash
+# 0. 工程放英文路径（如 ~/teacher_app），确认 Flutter 3.44+
 cd ~/teacher_app
+flutter --version
+
+# 1. 清干净 + 装依赖（改过 pubspec 后务必重跑 pub get）
+flutter clean
 flutter pub get
 
-# 2. 生成 iOS 工程（当前缺 ios 目录）。注意：此命令会 regen 平台模板文件，
-#    若之后还要打 Android 包，需重新确认 AndroidManifest 定位权限与 compileSdk=36 未被覆盖
-flutter create --platforms=ios .
-
-# 3. 安装 iOS 原生依赖
+# 2. 插件有增减时必须重装 iOS 原生依赖
 cd ios && pod install && cd ..
 
-# 4. 补 iOS 定位权限：在 ios/Runner/Info.plist 加（geolocator 必需）
-#    NSLocationWhenInUseUsageDescription   = "用于上下班签到时定位打卡点"
-#    NSLocationAlwaysAndWhenInUseUsageDescription = "用于上下班签到时定位打卡点"
+# 3. 打包 ipa（签名需已配好，见下方 Xcode 设置）
+flutter build ipa --release
+# 产物：build/ios/ipa/*.ipa
 
-# 5. Xcode 打开 ios/Runner.xcworkspace
-#    - 设 Bundle ID（如 com.yyf.teacherapp，需唯一）
-#    - Signing & Capabilities：选 Team（你的 Developer 账号），勾选 Automatically manage signing
+# 只想验证「能不能编译通过」（不签名，最快）
+flutter build ios --release --no-codesign
 
-# 6. 真机测试
-flutter run          # 连 iPhone（设备需在该 Developer 账号下注册 UDID）
-
-# 7. 打包 ipa
-flutter build ipa    # 产出 build/ios/ipa/*.ipa；或 Xcode → Product → Archive → Distribute App
+# 真机调试
+flutter run            # 连 iPhone（设备 UDID 需在该 Developer 账号下注册）
 ```
+
+**只有 Mac 上还没有 `ios/` 工程时才需要生成**：
+
+```bash
+flutter create --platforms=ios .
+# ⚠ 不要加 --overwrite（默认即「不覆盖已存在文件」），否则模板会冲掉 Info.plist 里的
+#   ATS 例外与四项权限描述。跑完务必 `git diff ios/Runner/Info.plist` 确认输出为空。
+# ⚠ 它同时会重写 android/ 模板，跑完确认 AndroidManifest.xml 定位权限与 compileSdk=36 还在。
+```
+
+**Xcode 里一次性设置**（`open ios/Runner.xcworkspace`）：
+
+- Bundle ID 用 `com.meikongcui.teacherapp`。**它存在 Xcode 工程里、不在 git** ——
+  `Info.plist` 中写的是 `$(PRODUCT_BUNDLE_IDENTIFIER)`，所以每台新 Mac 都要设一次。
+- Signing & Capabilities → 选 Team（你的 Developer 账号），勾 Automatically manage signing。
+- 归档上传：Product → Archive → Distribute App → App Store Connect → TestFlight。
+
+**发新版本时**：先把 `pubspec.yaml` 的 `version: 1.0.0+1` 改成 `1.0.0+2`，再 `flutter build ipa`。
+build 号不递增，App Store Connect 会直接拒收。
 
 ### 分发方式选择
 - **模拟器**（免费，不需 Developer 账号）：`flutter run` 选 iOS Simulator，仅能验证 UI，无法测真实定位。
@@ -254,10 +300,11 @@ flutter build ipa    # 产出 build/ios/ipa/*.ipa；或 Xcode → Product → Ar
 - **App Store 上架**：需 Developer 账号 + 审核，正式发布。
 
 ### 本机已踩/需注意的点
-- **iOS 定位权限必加**：之前只在 Android 的 `AndroidManifest.xml` 加了权限，iOS 端 `Info.plist` 没有；
-  不补会导致签到在 iOS 直接崩溃，且上架审核必被拒。
-- **`flutter create` 会覆盖 Android 配置**：在 Mac 生成 ios 时可能重写 android 模板文件，
-  生成后请确认 `AndroidManifest.xml` 定位权限、`build.gradle.kts` 的 `compileSdk=36` 仍在。
+- **iOS 权限与 ATS 已在 `Info.plist` 里配好**（定位 / 相机 / 相册 / 麦克风 + ATS 明文 HTTP 例外），
+  **不要再手工重加**，也不要让 `flutter create` 覆盖它 —— 从仓库同步该文件即可。
+  其中 ATS 例外是因为后端仍是明文 HTTP；将来后端上 HTTPS 后可删掉该段。
+- **`flutter create` 会重写平台模板**：见上文「打包步骤」的告警（勿加 `--overwrite`，
+  跑完 `git diff` 复核 iOS 与 Android 两侧配置未被冲掉）。
 - **图标**：默认占位图标可跑通流程，上架需提交正式 App Icon 全套（建议用 `flutter_launcher_icons` 生成）。
 - **架构**：iOS 需 arm64；Apple Silicon（M 系列）Mac 原生支持，Intel Mac 需 Rosetta 跑部分工具链。
 - **中文路径**：Mac 上构建同样建议工程放在英文路径，避免偶发工具链解析问题。
