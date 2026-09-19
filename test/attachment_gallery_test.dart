@@ -35,7 +35,7 @@ void main() {
   });
 
   testWidgets('有附件：标题给出张数，逐张渲染缩略图与序号角标', (WidgetTester tester) async {
-    // 刻意用非图片扩展名：图片分支会走 Image.network，
+    // 刻意用非图片扩展名：图片分支会走 AuthedImage（内部 Image.network），
     // flutter_test 里必然加载失败，徒增噪声；数量/序号逻辑与扩展名无关。
     await pump(
       tester,

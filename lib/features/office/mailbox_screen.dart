@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_app/app/design_tokens.dart';
 import 'package:teacher_app/features/office/mailbox_repository.dart';
+import 'package:teacher_app/shared/authed_image.dart';
 
 /// 「办公」→「员工信箱」：收件箱 / 已发送两个页签。
 ///
@@ -317,8 +318,8 @@ class _MailboxCard extends StatelessWidget {
                   separatorBuilder: (_, __) => const SizedBox(width: 6),
                   itemBuilder: (BuildContext ctx, int i) => ClipRRect(
                     borderRadius: BorderRadius.circular(AppRadius.xs),
-                    child: Image.network(
-                      message.imageUrl(message.images[i]),
+                    child: AuthedImage(
+                      path: message.images[i],
                       width: 56,
                       height: 56,
                       fit: BoxFit.cover,
@@ -412,11 +413,11 @@ class _MailboxDetailSheet extends StatelessWidget {
                 ),
                 itemCount: message.images.length,
                 itemBuilder: (BuildContext ctx, int i) => GestureDetector(
-                  onTap: () => _preview(context, message.imageUrl(message.images[i])),
+                  onTap: () => _preview(context, message.images[i]),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(AppRadius.xs),
-                    child: Image.network(
-                      message.imageUrl(message.images[i]),
+                    child: AuthedImage(
+                      path: message.images[i],
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         color: AppPalette.line,
@@ -457,7 +458,7 @@ class _MailboxDetailSheet extends StatelessWidget {
     );
   }
 
-  void _preview(BuildContext context, String url) {
+  void _preview(BuildContext context, String path) {
     showDialog<void>(
       context: context,
       builder: (BuildContext ctx) => Dialog(
@@ -466,7 +467,8 @@ class _MailboxDetailSheet extends StatelessWidget {
         child: GestureDetector(
           onTap: () => Navigator.of(ctx).pop(),
           child: InteractiveViewer(
-            child: Image.network(url,
+            child: AuthedImage(
+                path: path,
                 errorBuilder: (_, __, ___) => const Icon(Icons.broken_image,
                     color: Colors.white, size: 48)),
           ),

@@ -12,6 +12,7 @@ import 'package:teacher_app/features/rehab/data/cont_eval_catalog.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/cont_eval_catalog_form.dart';
 import 'package:teacher_app/features/rehab/presentation/widgets/part_nav_bar.dart';
 import 'package:teacher_app/features/rehab/provider/rehab_provider.dart';
+import 'package:teacher_app/shared/authed_image.dart';
 
 // ════════════════════════════════════════════════════════════════
 //  全局工具组件
@@ -993,7 +994,7 @@ class _PhotoTabState extends ConsumerState<_PhotoTab> {
                   if (_photos[i].filePath.startsWith('data:'))
                     Image.memory(base64Decode(_photos[i].filePath.split(',').last), fit: BoxFit.cover)
                   else
-                    Image.network(_photos[i].filePath, fit: BoxFit.cover,
+                    AuthedImage(path: _photos[i].filePath, fit: BoxFit.cover,
                       errorBuilder: (_,__,___) => const Center(child: Icon(Icons.broken_image, color: Colors.black26))),
                   Positioned(bottom: 0, left: 0, right: 0,
                     child: Container(decoration: BoxDecoration(

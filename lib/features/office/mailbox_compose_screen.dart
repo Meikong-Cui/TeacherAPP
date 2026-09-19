@@ -3,8 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:teacher_app/app/design_tokens.dart';
 import 'package:teacher_app/core/auth_store.dart';
-import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/features/office/mailbox_repository.dart';
+import 'package:teacher_app/shared/authed_image.dart';
 
 /// 「员工信箱」→ 写消息：选择收件人（可多选中即群发）+ 文字 + 图片。
 ///
@@ -282,10 +282,8 @@ class _MailboxComposeScreenState extends State<MailboxComposeScreen> {
                         Positioned.fill(
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(AppRadius.xs),
-                            child: Image.network(
-                              _images[i].startsWith('http')
-                                  ? _images[i]
-                                  : '${AppConstants.apiBaseUrl}${_images[i]}',
+                            child: AuthedImage(
+                              path: _images[i],
                               fit: BoxFit.cover,
                               errorBuilder: (_, __, ___) => Container(
                                 color: AppPalette.line,

@@ -136,8 +136,10 @@ class ApiClient {
   }
 
   /// 上传图片（multipart/form-data → POST /api/attachment/upload）。
-  /// 成功返回后端保存的相对地址（如 /api/attachment/file/202609/xxx.jpg），
-  /// 展示时自行拼接 [AppConstants.apiBaseUrl]。
+  /// 成功返回后端保存的相对地址（如 /api/attachment/file/202609/xxx.jpg）。
+  /// **展示时用 `lib/shared/authed_image.dart` 的 `AuthedImage`**，
+  /// 它会补全绝对地址并带上 Authorization —— 千万别自己拼 apiBaseUrl 交给
+  /// 裸 `Image.network`：附件接口要求 JWT，不带 header 一律 401 裂图。
   Future<String> uploadImage(String filePath) async {
     final Uri uri =
         Uri.parse('${AppConstants.apiBaseUrl}/api/attachment/upload');

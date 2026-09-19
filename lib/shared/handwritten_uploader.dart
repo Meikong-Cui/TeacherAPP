@@ -5,9 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:teacher_app/core/api_client.dart';
-import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 import 'package:teacher_app/features/rehab/data/rehab_repository.dart';
+import 'package:teacher_app/shared/authed_image.dart';
 
 /// 残联标准模板各部分「上传手写板」可复用组件。
 ///
@@ -138,9 +138,6 @@ class _HandwrittenUploaderState extends ConsumerState<HandwrittenUploader> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
-
-  String _fullUrl(String path) =>
-      path.startsWith('http') ? path : '${AppConstants.apiBaseUrl}$path';
 
   @override
   Widget build(BuildContext context) {
@@ -304,7 +301,8 @@ class _HandwrittenUploaderState extends ConsumerState<HandwrittenUploader> {
             onLongPress: () => _delete(p),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(_fullUrl(p.filePath),
+              child: AuthedImage(
+                  path: p.filePath,
                   width: 72, height: 72, fit: BoxFit.cover,
                   errorBuilder: (_, __, ___) => Container(
                     width: 72, height: 72,
@@ -350,7 +348,7 @@ class _HandwrittenUploaderState extends ConsumerState<HandwrittenUploader> {
               onLongPress: () => _delete(p),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(_fullUrl(p.filePath), fit: BoxFit.cover,
+                child: AuthedImage(path: p.filePath, fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: Colors.black12,
                       child: const Icon(Icons.broken_image),
@@ -381,7 +379,7 @@ class _HandwrittenUploaderState extends ConsumerState<HandwrittenUploader> {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (BuildContext ctx) => Scaffold(
         appBar: AppBar(title: Text(widget.title)),
-        body: Center(child: Image.network(_fullUrl(p.filePath))),
+        body: Center(child: AuthedImage(path: p.filePath)),
       ),
     ));
   }

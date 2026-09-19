@@ -1,5 +1,4 @@
 import 'package:teacher_app/core/api_client.dart';
-import 'package:teacher_app/core/constants.dart';
 
 /// 员工信箱消息（收件箱 / 发件箱共用模型）。
 ///
@@ -36,10 +35,6 @@ class MailboxMessage {
     if (t.isEmpty) return '［图片 ${images.length} 张］';
     return t;
   }
-
-  /// 图片完整访问地址（后端存相对路径 /api/attachment/file/...）。
-  String imageUrl(String path) =>
-      path.startsWith('http') ? path : '${AppConstants.apiBaseUrl}$path';
 
   factory MailboxMessage.fromJson(Map<String, dynamic> j) {
     final dynamic imgs = j['images'];
