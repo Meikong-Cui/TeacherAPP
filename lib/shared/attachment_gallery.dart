@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:teacher_app/app/design_tokens.dart';
+import 'package:teacher_app/shared/authed_image.dart';
 
 /// 附件画廊：缩略图横排 + 全屏查看器（双指缩放 / 左右翻页 / 点击空白关闭）。
 ///
@@ -91,8 +92,8 @@ class _Thumb extends StatelessWidget {
             fit: StackFit.expand,
             children: <Widget>[
               if (AttachmentGallery.looksLikeImage(url))
-                Image.network(
-                  url,
+                AuthedImage(
+                  path: url,
                   fit: BoxFit.cover,
                   loadingBuilder: (BuildContext c, Widget child,
                           ImageChunkEvent? progress) =>
@@ -256,8 +257,8 @@ class _AttachmentViewerState extends State<_AttachmentViewer> {
         ],
       );
     }
-    return Image.network(
-      url,
+    return AuthedImage(
+      path: url,
       fit: BoxFit.contain,
       loadingBuilder:
           (BuildContext c, Widget child, ImageChunkEvent? progress) =>
