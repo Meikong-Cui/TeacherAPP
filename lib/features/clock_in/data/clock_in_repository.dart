@@ -5,7 +5,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teacher_app/core/api_client.dart';
 import 'package:teacher_app/core/auth_store.dart';
-import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/clock_record.dart';
 import 'package:teacher_app/features/clock_in/domain/geo.dart';
@@ -20,29 +19,137 @@ const Duration kLocationTimeout = Duration(seconds: 15);
 /// 本地待同步队列的持久化 key。
 const String _pendingKey = 'clock_in_pending_records';
 
+/// 上次手动选择的打卡校区 id 的持久化 key。
+const String _selectedCampusKey = 'clock_in_selected_campus_id';
+
+/// 校区列表本地缓存的持久化 key。
+///
+/// 带版本后缀：缓存结构将来若变更，换掉 key 即可让旧格式自然失效，
+/// 不必写迁移代码（读到不认识的格式会被 [ClockInRepository.loadCampusCache] 判为无效）。
+const String _campusCacheKey = 'clock_in_campus_cache_v1';
+
+/// 一份从后台成功拉取过的校区列表缓存。
+///
+/// 存在的意义：让 App **不需要内置任何校区坐标**也能在离线时打卡 ——
+/// 用的仍然是后台真实下发过的数据，只是可能陈旧；陈旧度由 [cachedAt] 明确告知用户。
+class CampusCache {
+  const CampusCache({required this.campuses, required this.cachedAt});
+
+  final List<Campus> campuses;
+
+  /// 这份数据是什么时候从后台拉到的。
+  final DateTime cachedAt;
+}
+
 /// 签到数据层：定位、围栏距离计算、后端保存（预留）。
 class ClockInRepository {
   const ClockInRepository();
 
-  /// 默认打卡地点（真实环境由后台按校区下发）。
-  Campus get defaultCampus => Campus.defaultCampus;
+  /// 拉取后台校区列表（含打卡坐标与围栏半径，由 OA 网页「学校管理」维护）。
+  ///
+  /// 返回 null 表示**没拿到后台数据**（网络失败 / 权限不足 / 后端未就绪），
+  /// 由调用方回退到**本地缓存** [loadCampusCache] —— 注意不是回退到内置数据，
+  /// 本 App 已不再内置任何校区。
+  ///
+  /// 成功时顺带把结果写入缓存（写失败不影响本次打卡），供离线时使用。
+  Future<List<Campus>?> listCampuses() async {
+    try {
+      final dynamic data = await apiClient.get(
+        '/api/system/campuses',
+        params: <String, dynamic>{'current': 1, 'size': 200},
+      );
+      final dynamic records = (data is Map) ? data['records'] : data;
+      if (records is! List) return null;
+      final List<Campus> list = records
+          .whereType<Map>()
+          .map((Map e) => Campus.fromJson(Map<String, dynamic>.from(e)))
+          .where((Campus c) => c.id > 0 && c.name.isNotEmpty)
+          .toList();
+      if (list.isEmpty) return null;
+      // 不 await：缓存写盘失败只影响「下次离线时的兜底」，不能影响本次打卡。
+      unawaited(saveCampusCache(list));
+      return list;
+    } catch (_) {
+      // 静默降级为「没拿到」，由上层决定用缓存还是给出失败态。
+      return null;
+    }
+  }
+
+  /// 读取上次成功拉取的校区列表缓存。
+  ///
+  /// 没有缓存 / 格式不认 / 解析失败一律返回 null（由上层转为明确的失败态 + 重试入口）。
+  /// 这里**不返回空列表**：空列表会被上层当成「后台说没有校区」，与「没有缓存」
+  /// 是不同的语义，混在一起会让失败提示说不清原因。
+  Future<CampusCache?> loadCampusCache() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(_campusCacheKey);
+      if (raw == null || raw.isEmpty) return null;
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      final dynamic listRaw = decoded['list'];
+      if (listRaw is! List) return null;
+      final List<Campus> list = listRaw
+          .whereType<Map>()
+          .map((Map e) => Campus.fromJson(Map<String, dynamic>.from(e)))
+          .where((Campus c) => c.id > 0 && c.name.isNotEmpty)
+          .toList();
+      if (list.isEmpty) return null;
+      // 时间戳解析不出来时用「现在」而不是 null：宁可让提示显示的陈旧度偏乐观，
+      // 也不能因为缺个时间戳就把整份真实数据丢掉、让用户断网时无法打卡。
+      final DateTime cachedAt =
+          DateTime.tryParse((decoded['at'] ?? '').toString()) ?? DateTime.now();
+      return CampusCache(campuses: list, cachedAt: cachedAt);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 把刚拉到的校区列表写入本地缓存（含拉取时间）。
+  ///
+  /// 列表与时间戳存在**同一个 JSON** 里而不是两个 key：两个 key 会出现
+  /// 「列表已更新、时间戳没更新」的中间状态，让陈旧度提示说谎。
+  Future<void> saveCampusCache(List<Campus> campuses) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _campusCacheKey,
+        jsonEncode(<String, dynamic>{
+          'at': DateTime.now().toIso8601String(),
+          'list': campuses.map((Campus c) => c.toJson()).toList(),
+        }),
+      );
+    } catch (_) {
+      // 忽略：缓存写失败不影响本次打卡主流程。
+    }
+  }
 
   /// 计算到指定校区的球面距离（米）。
-  double distanceTo({
+  ///
+  /// 校区未配置坐标时返回 null —— 调用方必须显式处理。**不要退化成 0**：
+  /// 0 会被当成「就站在打卡点上」而放行，比报错危险得多。
+  ///
+  /// 入参与校区坐标同为 WGS-84，此处**不做任何坐标转换**
+  /// （坐标系的取舍见 `domain/geo.dart` 顶部的说明）。
+  double? distanceTo({
     required Campus campus,
     required double latitude,
     required double longitude,
-  }) =>
-      haversineDistance(
-        lat1: campus.latitude,
-        lon1: campus.longitude,
-        lat2: latitude,
-        lon2: longitude,
-      );
+  }) {
+    final double? lat = campus.latitude;
+    final double? lon = campus.longitude;
+    if (lat == null || lon == null) return null;
+    return haversineDistance(
+      lat1: lat,
+      lon1: lon,
+      lat2: latitude,
+      lon2: longitude,
+    );
+  }
 
-  /// 是否在允许围栏内（≤ 1000 米）。
-  bool isWithinFence(double distanceMeters) =>
-      distanceMeters <= AppConstants.clockInRadiusMeters;
+  /// 是否在该校区允许的围栏内（半径取校区配置，未配置时回退全局默认）。
+  bool isWithinFence(Campus campus, double distanceMeters) =>
+      distanceMeters <= campus.effectiveRadius;
 
   /// 获取当前定位（含权限申请、超时与降级兜底）。
   ///
@@ -98,6 +205,28 @@ class ClockInRepository {
     throw const ClockInException(
         '定位失败且无可用位置信息。请到开阔地带、开启 Wi‑Fi/移动网络辅助定位后重试，'
         '或改用「补卡申请」。');
+  }
+
+  // ── 打卡校区的记忆（下次进入页面时恢复上次选择）──
+
+  /// 读取上次手动选择的校区 id。没存过或读失败都返回 null。
+  Future<int?> loadSelectedCampusId() async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_selectedCampusKey);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 记住本次选择的校区 id。失败只影响「下次进入的默认值」，不阻塞打卡主流程。
+  Future<void> persistSelectedCampusId(int id) async {
+    try {
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_selectedCampusKey, id);
+    } catch (_) {
+      // 忽略
+    }
   }
 
   // ── 本地待同步队列（网络失败时兜底，避免打卡记录丢失）──

@@ -1,15 +1,20 @@
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/clock_record.dart';
-import 'package:teacher_app/features/clock_in/provider/clock_in_provider.dart';
 import 'package:teacher_app/features/clock_in/data/clock_in_repository.dart';
+import 'package:teacher_app/features/clock_in/presentation/widgets/fence_map_online.dart';
+import 'package:teacher_app/features/clock_in/provider/clock_in_provider.dart';
 import 'package:teacher_app/shared/ui.dart';
 
-/// 上下班签到页：指定地点 1000 米内方可打卡（使用真实 GPS 定位）。
+/// 上下班签到页。
+///
+/// 打卡地点**可以手动切换**，列表来自后台 `GET /api/system/campuses`
+/// （由 OA 网页「学校管理」维护）。App **不内置任何校区**：后台不可达时依次退到
+/// 「本地缓存（界面标注拉取时间）」与「明确失败态 + 重试入口」，不会出现
+/// 「看起来正常的假校区」。
+/// 在各自校区的围栏半径内方可打卡，围栏半径同样由后台按校区配置。
 class ClockInScreen extends ConsumerStatefulWidget {
   const ClockInScreen({super.key});
 
@@ -34,19 +39,26 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
     final ColorScheme colors = Theme.of(context).colorScheme;
     final TextTheme textTheme = Theme.of(context).textTheme;
 
-    // 实时（真实 GPS）距离，用于围栏可视化
-    double? liveDistance;
-    double? dx;
-    double? dy;
-    if (state.currentLatitude != null && state.currentLongitude != null) {
-      liveDistance = repo.distanceTo(
-        campus: state.campus,
-        latitude: state.currentLatitude!,
-        longitude: state.currentLongitude!,
-      );
-      dx = state.currentLongitude! - state.campus.longitude;
-      dy = state.currentLatitude! - state.campus.latitude;
-    }
+    // 当前选中校区。为 null 表示还没拿到任何校区数据（后台不可达且无可用缓存）。
+    final Campus? selected = state.campus;
+
+    // 实时（真实 GPS）距离，用于围栏可视化。无选中校区、或校区未配坐标时为 null。
+    final bool hasFix =
+        state.currentLatitude != null && state.currentLongitude != null;
+    final double? liveDistance = (hasFix && selected != null)
+        ? repo.distanceTo(
+            campus: selected,
+            latitude: state.currentLatitude!,
+            longitude: state.currentLongitude!,
+          )
+        : null;
+    final double fenceRadius = state.fenceRadiusMeters;
+    final bool withinFence =
+        liveDistance != null && liveDistance <= fenceRadius;
+
+    // 没有校区就没有打卡点，也就没有围栏 —— 按钮禁用。
+    // **但不是静默禁用**：下方有红色区块说明原因并给出「重试」入口。
+    final bool canClock = selected != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -56,85 +68,149 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: <Widget>[
-          // 打卡地点
+          // 打卡地点（可手动切换）
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text('打卡地点', style: textTheme.titleSmall),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<Campus>(
-                    initialValue: state.campus,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.apartment_outlined),
-                    ),
-                    items: <DropdownMenuItem<Campus>>[
-                      for (final c in Campus.all)
-                        DropdownMenuItem<Campus>(
-                          value: c,
-                          child: Text(c.name),
+                  Row(
+                    children: <Widget>[
+                      Text('打卡地点', style: textTheme.titleSmall),
+                      if (state.loadingCampuses) ...<Widget>[
+                        const SizedBox(width: 8),
+                        const SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         ),
+                        const SizedBox(width: 6),
+                        Text('加载校区列表…', style: textTheme.bodySmall),
+                      ],
                     ],
-                    onChanged: (c) {
-                      if (c == null) return;
-                      ref.read(clockInProvider.notifier).setCampus(c);
-                    },
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '仅在距该地点 ${AppConstants.clockInRadiusMeters.toInt()} 米内允许签到',
-                    style: textTheme.bodySmall,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          // 围栏可视化
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: <Widget>[
-                  FenceMap(
-                    distanceMeters: liveDistance ?? 0,
-                    dx: dx,
-                    dy: dy,
-                    active: liveDistance != null,
-                  ),
-                  const SizedBox(height: 12),
-                  if (liveDistance != null)
-                    StatusChip(
-                      liveDistance <= AppConstants.clockInRadiusMeters
-                          ? '在围栏内 · ${liveDistance.toStringAsFixed(0)} m'
-                          : '超出围栏 · ${liveDistance.toStringAsFixed(0)} m',
-                      tone: liveDistance <= AppConstants.clockInRadiusMeters
-                          ? colors.primary
-                          : Colors.orange,
+                  const SizedBox(height: 8),
+                  if (state.campuses.isEmpty)
+                    Text(
+                      state.loadingCampuses
+                          ? '正在从后台获取校区列表…'
+                          : '未能获取校区列表。校区与打卡坐标由管理员在 OA 网页'
+                              '「学校管理」中维护，请检查网络后重试。',
+                      style: textTheme.bodySmall,
                     )
-                  else
-                    const Text('点击下方按钮获取定位并计算距离'),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    icon: state.locating
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.my_location),
-                    label: Text(state.locating ? '定位中…' : '获取当前位置'),
-                    onPressed: state.locating
-                        ? null
-                        : () =>
-                            ref.read(clockInProvider.notifier).fetchLocation(),
-                  ),
+                  else ...<Widget>[
+                    DropdownButtonFormField<Campus>(
+                      // ⚠️ key 是必需的，不是装饰：`initialValue` 只在挂载时生效，
+                      // 不加 key 时「切换校区后下拉框显示的还是旧值」——用户会以为
+                      // 选择没生效。绑到 id + 列表长度上，列表加载完或换选后强制重挂载，
+                      // 保证显示值与 state 永远一致。
+                      key: ValueKey<String>(
+                          'campus-dd-${state.campuses.length}-${selected?.id}'),
+                      initialValue: selected,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.apartment_outlined),
+                      ),
+                      items: <DropdownMenuItem<Campus>>[
+                        for (final Campus c in state.campuses)
+                          DropdownMenuItem<Campus>(
+                            value: c,
+                            child: Text(
+                              c.hasGeo ? c.name : '${c.name}（未配置坐标）',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                      onChanged: (Campus? c) {
+                        if (c == null) return;
+                        ref.read(clockInProvider.notifier).setCampus(c);
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      selected != null && selected.hasGeo
+                          ? '仅在距「${selected.name}」打卡点 '
+                              '${fenceRadius.toInt()} 米内允许签到'
+                          : '「${selected?.name ?? ''}」尚未配置打卡坐标，'
+                              '无法判定是否在岗，请在 OA「学校管理」中录入坐标',
+                      style: textTheme.bodySmall,
+                    ),
+                  ],
                 ],
               ),
             ),
           ),
+          // 校区列表彻底拿不到（后台不可达且本地无缓存）：红色区块 + 重试入口。
+          // 与「超出围栏」等打卡失败分开展示 —— 它不是打卡动作引起的，
+          // 而是页面压根还没准备好。
+          if (state.campusLoadFailed) ...<Widget>[
+            const SizedBox(height: 12),
+            MessageBox(
+              color: colors.error,
+              icon: Icons.cloud_off_outlined,
+              message: '未能从后台获取校区列表，且本地没有可用缓存，无法判定打卡范围。'
+                  '请检查网络后重试。',
+              actions: <Widget>[
+                TextButton.icon(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('重试'),
+                  onPressed: state.loadingCampuses
+                      ? null
+                      : () => ref.read(clockInProvider.notifier).loadCampuses(),
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.note_alt_outlined, size: 16),
+                  label: const Text('申请补卡'),
+                  onPressed: () => context.push('/supplement/new'),
+                ),
+              ],
+            ),
+          ],
+          // 地图：真实底图 + 打卡点 + 围栏圈 + 当前位置；底图不可用时自动退回示意图。
+          if (selected != null) ...<Widget>[
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: <Widget>[
+                    FenceMapOnline(
+                      campus: selected,
+                      currentLatitude: state.currentLatitude,
+                      currentLongitude: state.currentLongitude,
+                      distanceMeters: liveDistance,
+                    ),
+                    const SizedBox(height: 12),
+                    if (liveDistance != null)
+                      StatusChip(
+                        withinFence
+                            ? '在围栏内 · ${liveDistance.toStringAsFixed(0)} m'
+                            : '超出围栏 · ${liveDistance.toStringAsFixed(0)} m',
+                        tone: withinFence ? colors.primary : Colors.orange,
+                      )
+                    else
+                      const Text('点击下方按钮获取定位并计算距离'),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      icon: state.locating
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.my_location),
+                      label: Text(state.locating ? '定位中…' : '获取当前位置'),
+                      onPressed: state.locating
+                          ? null
+                          : () =>
+                              ref.read(clockInProvider.notifier).fetchLocation(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           // 打卡按钮
           Row(
@@ -143,7 +219,7 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
                 child: FilledButton.icon(
                   icon: const Icon(Icons.login),
                   label: const Text('上班打卡'),
-                  onPressed: state.loading
+                  onPressed: (state.loading || !canClock)
                       ? null
                       : () => ref
                           .read(clockInProvider.notifier)
@@ -155,7 +231,7 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
                 child: FilledButton.tonalIcon(
                   icon: const Icon(Icons.logout),
                   label: const Text('下班打卡'),
-                  onPressed: state.loading
+                  onPressed: (state.loading || !canClock)
                       ? null
                       : () => ref
                           .read(clockInProvider.notifier)
@@ -167,7 +243,7 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
           if (state.loading) const SizedBox(height: 12),
           if (state.loading)
             const Center(child: CircularProgressIndicator()),
-          // 阻断性失败（超出围栏 / 定位不可用）：给出原因 + 可操作出口，
+          // 阻断性失败（超出围栏 / 定位不可用 / 校区未配坐标）：给出原因 + 可操作出口，
           // 不再是「按钮置灰、页面毫无反应」。
           if (state.error != null) ...<Widget>[
             const SizedBox(height: 12),
@@ -200,6 +276,16 @@ class _ClockInScreenState extends ConsumerState<ClockInScreen> {
               color: Colors.orange.shade800,
               icon: Icons.info_outline,
               message: state.notice!,
+            ),
+          ],
+          // 校区列表的来源与可用性（用的是缓存数据还是后台实时数据、哪些校区缺坐标）。
+          // 独立于 notice 展示，不会在打卡/同步后被清掉。
+          if (state.campusSourceNote != null) ...<Widget>[
+            const SizedBox(height: 12),
+            MessageBox(
+              color: Colors.orange.shade800,
+              icon: Icons.location_off_outlined,
+              message: state.campusSourceNote!,
             ),
           ],
           const SizedBox(height: 16),
@@ -330,109 +416,4 @@ class MessageBox extends StatelessWidget {
       ),
     );
   }
-}
-
-/// 围栏可视化：中心为打卡点，外圈为 1000 米围栏，圆点为当前位置。
-class FenceMap extends StatelessWidget {
-  const FenceMap({
-    super.key,
-    required this.distanceMeters,
-    this.dx,
-    this.dy,
-    this.active = false,
-  });
-
-  final double distanceMeters;
-  final double? dx;
-  final double? dy;
-  final bool active;
-
-  @override
-  Widget build(BuildContext context) {
-    const double size = 240;
-    const double fenceRadius = size * 0.42;
-    final ColorScheme colors = Theme.of(context).colorScheme;
-
-    final double ratio =
-        (distanceMeters / AppConstants.clockInRadiusMeters).clamp(0, 1);
-    double angle = 0;
-    if (dx != null && dy != null && (dx! != 0 || dy! != 0)) {
-      angle = math.atan2(dx!, dy!);
-    }
-    final double r = ratio * fenceRadius;
-    final double dotX = size / 2 + r * math.sin(angle) - 9;
-    final double dotY = size / 2 - r * math.cos(angle) - 9;
-    final bool within = distanceMeters <= AppConstants.clockInRadiusMeters;
-
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        children: <Widget>[
-          CustomPaint(
-            size: const Size(size, size),
-            painter: _FencePainter(colors: colors, within: within),
-          ),
-          // 打卡点（中心）
-          Positioned(
-            left: size / 2 - 6,
-            top: size / 2 - 6,
-            child: Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: colors.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-              ),
-            ),
-          ),
-          // 当前位置
-          if (active)
-            Positioned(
-              left: dotX,
-              top: dotY,
-              child: Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: within ? Colors.green : Colors.orange,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FencePainter extends CustomPainter {
-  const _FencePainter({required this.colors, required this.within});
-  final ColorScheme colors;
-  final bool within;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double fenceRadius = size.width * 0.42;
-    final Offset center = Offset(size.width / 2, size.height / 2);
-
-    // 围栏填充
-    final Paint fill = Paint()
-      ..color = (within ? colors.primary : Colors.orange).withValues(alpha: 0.12);
-    canvas.drawCircle(center, fenceRadius, fill);
-
-    // 围栏描边（虚线感：用半透明双环）
-    final Paint stroke = Paint()
-      ..color = (within ? colors.primary : Colors.orange).withValues(alpha: 0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawCircle(center, fenceRadius, stroke);
-    canvas.drawCircle(center, fenceRadius * 0.6, stroke);
-  }
-
-  @override
-  bool shouldRepaint(covariant _FencePainter old) =>
-      old.within != within || old.colors != colors;
 }

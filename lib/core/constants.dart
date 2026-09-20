@@ -52,6 +52,43 @@ class AppConstants {
   /// TEACHER 申请，PRINCIPAL/ADMIN/FINANCE 审批）。
   static const String sealPath = '/api/seal';
 
-  /// 打卡围栏半径（米）。要求在指定打卡地点 1000 米内才可签到。
+  /// 打卡围栏半径的**全局默认值**（米）。
+  ///
+  /// 自 2026-09-20 起每个校区可以有自己的半径（后台 `sys_campus.clock_radius`，
+  /// 在 OA 网页「学校管理」里维护），本常量是校区未配置时的兜底。
+  /// 取用时走 `Campus.effectiveRadius`，不要直接读这里。
   static const double clockInRadiusMeters = 1000.0;
+
+  // ── 真实地图底图 ──────────────────────────────────────────────────
+
+  /// 是否启用真实地图底图。关掉则打卡页只画抽象围栏示意图，不请求任何外部瓦片。
+  ///
+  /// 编译期开关，用于离线演示或合规审查（中国区上架展示地图需要审图号，
+  /// 直连第三方瓦片属灰色用法）：
+  ///   flutter build apk --dart-define=CLOCK_IN_MAP=false
+  static const bool mapEnabled =
+      bool.fromEnvironment('CLOCK_IN_MAP', defaultValue: true);
+
+  /// 底图瓦片地址模板（高德「路网图」瓦片）。
+  ///
+  /// 选型依据（2026-09-20 在国内网络实测）：
+  ///   · OSM 官方 `tile.openstreetmap.org` / `a.tile...` —— **超时不可达**（HTTP 000）；
+  ///   · Google Maps —— 国内本就打不开，且需 API key + 计费；
+  ///   · 高德 `webrd0x.is.autonavi.com` —— 200 / 0.43s，返回真实地图 PNG。
+  ///
+  /// ⚠️ 瓦片是 **GCJ-02**，而 GPS 与后台存的打卡点坐标都是 **WGS-84**，
+  /// 所以绘制前必须过 `domain/geo.dart` 的 `wgs84ToGcj02`，否则整体偏 300~600 米。
+  /// 将来换合规底图（官方 SDK / 自建瓦片代理）时只改这一个常量。
+  static const String mapTileUrlTemplate =
+      'https://webrd0{s}.is.autonavi.com/appmaptile'
+      '?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}';
+
+  /// 瓦片子域，对应模板里的 `{s}`。
+  static const List<String> mapTileSubdomains = <String>['1', '2', '3', '4'];
+
+  /// 地图初始缩放级别（园区尺度：能同时看见围栏圈与附近街区）。
+  static const double mapInitialZoom = 15.5;
+
+  /// 瓦片请求附带的包名标识（flutter_map 要求设，便于瓦片方识别来源）。
+  static const String mapUserAgentPackageName = 'com.meikongcui.teacherapp';
 }

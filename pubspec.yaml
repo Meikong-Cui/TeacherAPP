@@ -13,6 +13,14 @@ dependencies:
   go_router: ^14.2.0
   geolocator: ^12.0.0
   http: ^1.2.0
+  # 打卡页的真实地图底图。
+  # flutter_map 是**纯 Dart** 包、不含原生代码 ⇒ 不用 pod install、不动 Mac 上的
+  # Xcode 工程、不需要申请任何地图 key（这也是它胜过 google_maps_flutter /
+  # amap_flutter_map 的主要原因）。
+  # 底图源见 AppConstants.mapTileUrlTemplate；⚠️ 高德瓦片是 GCJ-02，
+  # 而校区坐标与 GPS 是 WGS-84，绘制前必须过 domain/geo.dart 的 wgs84ToGcj02。
+  flutter_map: ^8.2.1
+  latlong2: ^0.10.1
   intl: ^0.19.0
   shared_preferences: ^2.2.2
   image_picker: ^1.1.2

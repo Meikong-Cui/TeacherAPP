@@ -1,6 +1,5 @@
 import 'package:teacher_app/core/api_client.dart';
 import 'package:teacher_app/core/auth_store.dart';
-import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/user.dart';
 
 /// 鉴权数据层：调用后端 /api/auth/login，解析 JWT 声明并持久化登录态。
@@ -61,19 +60,16 @@ class AuthRepository {
     final List<String> roles = rolesRaw.map((e) => e.toString()).toList();
     final String role = _roleLabel(roles);
 
-    String center = '—';
-    final dynamic campusRaw = data['campusId'];
-    final int? campusId = campusRaw is int
-        ? campusRaw
-        : (campusRaw is String ? int.tryParse(campusRaw) : null);
-    if (campusId != null) {
-      for (final Campus c in Campus.all) {
-        if (c.id == campusId) {
-          center = c.name;
-          break;
-        }
-      }
-    }
+    // 校区名由后端 /api/me 的 campusName 字段直接下发（2026-09-20 起）。
+    //
+    // 此前这里是拿 App **内置的硬编码校区列表**把 campusId 翻成中文名，
+    // 于是管理员在 OA「学校管理」里改了校区名、或新增了校区之后，首页显示的
+    // 还是旧名字，遇到不认识的 id 直接显示「—」。改为后端下发后，
+    // 校区名称只剩一个真相源。字段缺失（如后端旧版本）时保持「—」。
+    final dynamic campusNameRaw = data['campusName'];
+    final String center = (campusNameRaw is String && campusNameRaw.isNotEmpty)
+        ? campusNameRaw
+        : '—';
 
     final String avatar = displayName.isNotEmpty ? displayName[0] : '?';
     return TeacherUser.demo.copyWith(
