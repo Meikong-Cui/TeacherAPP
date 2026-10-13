@@ -325,6 +325,7 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
         type: type,
         time: DateTime.now(),
         campusName: target.name,
+        campusId: target.id,
         latitude: fix.latitude,
         longitude: fix.longitude,
         distanceMeters: distance,

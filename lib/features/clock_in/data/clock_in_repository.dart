@@ -271,6 +271,9 @@ class ClockInRepository {
   /// 该分类由 OA 网页 oaRecordConfig.ts 的 `staff-clock` 配置驱动，列表展示
   /// [姓名 / 日期 / 上班时间 / 下班时间 / 状态]；本方法构造完全一致的 content，
   /// 使 APP 打完卡后，后台该页面能立即新增一条记录。
+  ///
+  /// 2026-10-13 起 content 增记 [source=APP / campusId / lat / lng]：
+  /// 后台可事后核查打卡位置，并区分「App 打卡 / 补卡回写 / 手工代录」三种来源。
   Future<void> saveRemote(ClockRecord record) async {
     final String employee = AuthStore.instance.userName ?? '教师';
 
@@ -278,7 +281,12 @@ class ClockInRepository {
       'employee': employee,
       'clockDate': _dateOf(record.time),
       'statusLabel': _statusLabelOf(record),
+      'source': 'APP',
     };
+    if (record.campusId != null) content['campusId'] = record.campusId!;
+    // 位置留痕（2026-10-13）：围栏判定通过后把坐标一并上送，后台可核查
+    content['lat'] = record.latitude;
+    content['lng'] = record.longitude;
     if (record.type == ClockType.checkIn) {
       content['onTime'] = _timeOf(record.time);
     } else {

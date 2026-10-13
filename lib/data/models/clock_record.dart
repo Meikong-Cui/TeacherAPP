@@ -17,6 +17,7 @@ class ClockRecord {
     required this.type,
     required this.time,
     required this.campusName,
+    this.campusId,
     required this.latitude,
     required this.longitude,
     required this.distanceMeters,
@@ -29,6 +30,9 @@ class ClockRecord {
   final ClockType type;
   final DateTime time;
   final String campusName;
+
+  /// 打卡校区 id（后台留痕用：校区可被改名，id 才稳定）。
+  final int? campusId;
   final double latitude;
   final double longitude;
   final double distanceMeters;
@@ -48,6 +52,7 @@ class ClockRecord {
     ClockType? type,
     DateTime? time,
     String? campusName,
+    int? campusId,
     double? latitude,
     double? longitude,
     double? distanceMeters,
@@ -60,6 +65,7 @@ class ClockRecord {
         type: type ?? this.type,
         time: time ?? this.time,
         campusName: campusName ?? this.campusName,
+        campusId: campusId ?? this.campusId,
         latitude: latitude ?? this.latitude,
         longitude: longitude ?? this.longitude,
         distanceMeters: distanceMeters ?? this.distanceMeters,
@@ -78,6 +84,7 @@ class ClockRecord {
         'type': type.name,
         'time': time.toIso8601String(),
         'campusName': campusName,
+        if (campusId != null) 'campusId': campusId,
         'latitude': latitude,
         'longitude': longitude,
         'distanceMeters': distanceMeters,
@@ -101,6 +108,9 @@ class ClockRecord {
       type: type,
       time: time,
       campusName: json['campusName']?.toString() ?? '',
+      campusId: json['campusId'] is num
+          ? (json['campusId'] as num).toInt()
+          : int.tryParse(json['campusId']?.toString() ?? ''),
       latitude: d('latitude') ?? 0,
       longitude: d('longitude') ?? 0,
       distanceMeters: d('distanceMeters') ?? 0,
