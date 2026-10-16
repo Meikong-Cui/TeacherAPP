@@ -4,13 +4,10 @@ import 'dart:convert';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teacher_app/core/api_client.dart';
-import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/clock_record.dart';
+import 'package:teacher_app/features/clock_in/domain/attendance.dart';
 import 'package:teacher_app/features/clock_in/domain/geo.dart';
-
-/// 后台「工作提示-员工打卡」对应的 oa_record 分类（与 OA 网页 oaRecordConfig.ts 一致）。
-const String _staffClockCategory = 'staff-clock';
 
 /// 实时定位的最长等待时间。超时后降级为「上次已知位置」，
 /// 避免 GPS 无信号时 Future 一直不返回（表现为打卡按钮永久转圈/置灰）。
@@ -266,68 +263,67 @@ class ClockInRepository {
     }
   }
 
-  /// 签到记录保存至后台「工作提示-员工打卡」页（oa_record, category=staff-clock）。
+  /// 拉取「今日考勤」视图：本人生效班次 + 当天已打卡时间 + 服务器时间。
   ///
-  /// 该分类由 OA 网页 oaRecordConfig.ts 的 `staff-clock` 配置驱动，列表展示
-  /// [姓名 / 日期 / 上班时间 / 下班时间 / 状态]；本方法构造完全一致的 content，
-  /// 使 APP 打完卡后，后台该页面能立即新增一条记录。
+  /// 打卡页靠它决定「现在该打上班卡还是下班卡」「这一下算不算迟到」，
+  /// 而不是在客户端写死 9:00 / 18:00（校区改时间后会集体误判）。
   ///
-  /// 2026-10-13 起 content 增记 [source=APP / campusId / lat / lng]：
-  /// 后台可事后核查打卡位置，并区分「App 打卡 / 补卡回写 / 手工代录」三种来源。
-  Future<void> saveRemote(ClockRecord record) async {
-    final String employee = AuthStore.instance.userName ?? '教师';
-
-    final Map<String, Object> content = <String, Object>{
-      'employee': employee,
-      'clockDate': _dateOf(record.time),
-      'statusLabel': _statusLabelOf(record),
-      'source': 'APP',
-    };
-    if (record.campusId != null) content['campusId'] = record.campusId!;
-    // 位置留痕（2026-10-13）：围栏判定通过后把坐标一并上送，后台可核查
-    content['lat'] = record.latitude;
-    content['lng'] = record.longitude;
-    if (record.type == ClockType.checkIn) {
-      content['onTime'] = _timeOf(record.time);
-    } else {
-      content['offTime'] = _timeOf(record.time);
+  /// 返回 null 表示没拿到（未登录 / 网络失败 / 后端未升级到该接口）。
+  /// **拿不到不是阻断性失败**：调用方退回「只用本地记录判断按钮」，照样能打卡。
+  Future<AttendanceToday?> fetchAttendanceToday() async {
+    try {
+      final dynamic data = await apiClient.get('/api/oa/record/attendance-today');
+      if (data is! Map) return null;
+      final AttendanceToday a =
+          AttendanceToday.fromJson(Map<String, dynamic>.from(data));
+      // 后台若还没配过考勤时间会回空串，落到模型默认值（09:00 / 18:00）。
+      return a;
+    } catch (_) {
+      return null;
     }
+  }
 
+  /// 提交一次打卡到后台（oa_record, category=staff-clock）。
+  ///
+  /// 与旧的 `POST /api/oa/record` 的区别：那条每次调用都**新增**一条记录，
+  /// 而下班卡允许反复刷新（走得晚、忘了打再补打），会让后台「员工打卡」列表
+  /// 同一天堆出多行。现在改走 `/clock`，由服务端按「员工 + 日期」合并：
+  /// 上班取最早、下班取最晚，一天恒定一行。
+  ///
+  /// 时间传客户端的打卡时刻（'HH:mm:ss'）：离线留存后补传时「打卡那一刻」已经
+  /// 过去，只能以客户端记录为准；非法则由服务端按当时时间兜底。
+  Future<ClockSubmitResult> submitClock(ClockRecord record) async {
     final Map<String, dynamic> payload = <String, dynamic>{
-      'category': _staffClockCategory,
-      'recordTitle': employee,
-      'content': content,
-      'status': 2, // 已完成（与 staff-clock 默认状态一致）
-      'creatorName': employee,
+      'type': record.type == ClockType.checkIn ? 'IN' : 'OUT',
+      'time': _secondOf(record.time),
+      if (record.campusId != null) 'campusId': record.campusId!,
+      'lat': record.latitude,
+      'lng': record.longitude,
     };
 
     try {
-      await apiClient.post('/api/oa/record', payload);
+      final dynamic data = await apiClient.post('/api/oa/record/clock', payload);
+      if (data is! Map) {
+        throw const ClockInException('打卡记录同步失败：后台返回格式异常');
+      }
+      return ClockSubmitResult.fromJson(
+          record.type, Map<String, dynamic>.from(data));
     } on ApiException catch (e) {
       // 透传后端业务错误，便于签到页给出明确提示。
       throw ClockInException('打卡记录同步失败：${e.message}');
+    } on ClockInException {
+      rethrow;
     } catch (e) {
       throw ClockInException('打卡记录同步失败：$e');
     }
   }
 }
 
-/// yyyy-MM-dd
-String _dateOf(DateTime t) =>
-    '${t.year}-${_pad(t.month)}-${_pad(t.day)}';
-
-/// HH:mm
-String _timeOf(DateTime t) => '${_pad(t.hour)}:${_pad(t.minute)}';
+/// HH:mm:ss —— 打卡时刻上送到秒（后台 onTime/offTime 仍是 HH:mm，秒值单独留痕）。
+String _secondOf(DateTime t) =>
+    '${_pad(t.hour)}:${_pad(t.minute)}:${_pad(t.second)}';
 
 String _pad(int n) => n.toString().padLeft(2, '0');
-
-/// 上班晚于 09:00 记为「迟到」，下班早于 18:00 记为「早退」，其余「正常」。
-String _statusLabelOf(ClockRecord record) {
-  if (record.type == ClockType.checkIn) {
-    return record.time.hour >= 9 ? '迟到' : '正常';
-  }
-  return record.time.hour < 18 ? '早退' : '正常';
-}
 
 /// 签到相关异常（携带中文提示）。
 class ClockInException implements Exception {

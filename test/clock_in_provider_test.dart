@@ -5,6 +5,7 @@ import 'package:teacher_app/core/auth_store.dart';
 import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/clock_record.dart';
 import 'package:teacher_app/features/clock_in/data/clock_in_repository.dart';
+import 'package:teacher_app/features/clock_in/domain/attendance.dart';
 import 'package:teacher_app/features/clock_in/provider/clock_in_provider.dart';
 
 /// 测试用的「后台下发」校区列表。
@@ -32,11 +33,18 @@ class FakeClockInRepository extends ClockInRepository {
     this.selectedCampusId,
     this.remoteUnavailable = false,
     this.cached,
+    this.attendance,
   }) : campuses = campuses ?? _remoteCampuses;
 
   LocationFix? fix;
   String? locationError; // 非空 → 定位失败
   String? syncError; // 非空 → 后台同步失败
+
+  /// `fetchAttendanceToday()` 的返回值。null = 后台没给（未登录 / 网络失败）。
+  ///
+  /// ⚠️ 必须在这里覆盖掉真实现：真实现会发真实 HTTP 请求，跑测试时既慢又
+  /// 依赖环境。默认 null 正好对应「拿不到班次」这条分支，也就要显式给值才能测迟到。
+  AttendanceToday? attendance;
 
   /// 后台返回的校区列表。默认为 [_remoteCampuses]（等价于「后台正常返回数据」）。
   ///
@@ -61,6 +69,7 @@ class FakeClockInRepository extends ClockInRepository {
   final List<List<Campus>> savedCaches = <List<Campus>>[];
 
   int syncCalls = 0;
+  final List<ClockRecord> submitted = <ClockRecord>[];
   final List<ClockRecord> persisted = <ClockRecord>[];
   final List<int> persistedCampusIds = <int>[];
 
@@ -71,9 +80,31 @@ class FakeClockInRepository extends ClockInRepository {
   }
 
   @override
-  Future<void> saveRemote(ClockRecord record) async {
+  Future<AttendanceToday?> fetchAttendanceToday() async => attendance;
+
+  @override
+  Future<ClockSubmitResult> submitClock(ClockRecord record) async {
     syncCalls++;
+    submitted.add(record);
     if (syncError != null) throw ClockInException(syncError!);
+    // 忠实模拟后台的合并口径：上班取最早、下班取最晚，状态由后台算。
+    final String hhmm = '${record.time.hour.toString().padLeft(2, '0')}:'
+        '${record.time.minute.toString().padLeft(2, '0')}';
+    final String start = attendance?.start ?? '09:00';
+    return ClockSubmitResult(
+      type: record.type,
+      time: record.time,
+      id: 100 + syncCalls,
+      onTime: record.type == ClockType.checkIn
+          ? hhmm
+          : attendance?.onTime,
+      offTime: record.type == ClockType.checkOut ? hhmm : attendance?.offTime,
+      onTimeSec: '$hhmm:00',
+      offTimeSec: record.type == ClockType.checkOut ? '$hhmm:00' : null,
+      statusLabel: hhmm.compareTo(start) > 0 ? '迟到' : '正常',
+      late: record.type == ClockType.checkIn && hhmm.compareTo(start) > 0,
+      synced: true,
+    );
   }
 
   @override
@@ -478,6 +509,150 @@ void main() {
     expect((await withCache.loadCampusCache())?.cachedAt, at);
     expect(await FakeClockInRepository().loadCampusCache(), isNull,
         reason: '默认没有缓存 —— 别让「无缓存」的用例悄悄跑在有缓存的分支上');
+  });
+
+  // ── 2026-10-16 改版：单按钮流转 / 迟到判定 / 下班卡可反复更新 ──
+
+  test('按钮流转：没打上班卡只给上班卡，打过之后只给下班卡', () async {
+    final FakeClockInRepository repo = FakeClockInRepository(
+      fix: _fixAt(_lat, _lon),
+      attendance: const AttendanceToday(
+          date: '2026-10-16', start: '09:00', end: '18:00'),
+    );
+    final ProviderContainer c = _container(repo);
+    await _settle(c);
+
+    expect(c.read(clockInProvider).nextClockType, ClockType.checkIn,
+        reason: '还没打上班卡，只应显示上班打卡');
+    expect(c.read(clockInProvider).hasCheckedIn, isFalse);
+
+    await c.read(clockInProvider.notifier).doClockIn(ClockType.checkIn);
+    final ClockInState s = c.read(clockInProvider);
+
+    expect(s.hasCheckedIn, isTrue, reason: '本地已留存上班记录，按钮该翻到下班卡');
+    expect(s.nextClockType, ClockType.checkOut);
+  });
+
+  test('后台侧已打过上班卡：进页面直接是下班卡状态（换手机也不回退）', () async {
+    final FakeClockInRepository repo = FakeClockInRepository(
+      fix: _fixAt(_lat, _lon),
+      attendance: const AttendanceToday(
+        date: '2026-10-16',
+        start: '09:00',
+        end: '18:00',
+        onTime: '08:55',
+        statusLabel: '正常',
+      ),
+    );
+    final ProviderContainer c = _container(repo);
+    await _settle(c);
+
+    final ClockInState s = c.read(clockInProvider);
+    expect(s.hasCheckedIn, isTrue, reason: '按钮流转要认后台记录，不能只看本地');
+    expect(s.hasCheckedOut, isFalse);
+    expect(s.nextClockType, ClockType.checkOut);
+  });
+
+  test('迟到判定以后台生效班次为准；拿不到班次时不判迟到', () async {
+    // start=00:00 → 任何时刻都算迟到（用时间边界做确定性断言，不依赖跑测的钟点）
+    final ProviderContainer c1 = _container(FakeClockInRepository(
+      fix: _fixAt(_lat, _lon),
+      attendance: const AttendanceToday(
+          date: '2026-10-16', start: '00:00', end: '23:59'),
+    ));
+    await _settle(c1);
+    expect(c1.read(clockInProvider).attendance, isNotNull, reason: '前置：班次已拿到');
+    expect(c1.read(clockInProvider).lateNow, isTrue);
+
+    // start=23:59 → 正常时段内不算迟到
+    final ProviderContainer c2 = _container(FakeClockInRepository(
+      fix: _fixAt(_lat, _lon),
+      attendance: const AttendanceToday(
+          date: '2026-10-16', start: '23:59', end: '23:59'),
+    ));
+    await _settle(c2);
+    expect(c2.read(clockInProvider).lateNow, isFalse);
+
+    // 后台班次拿不到：不判迟到 —— 宁可少打扰一次，也不能凭本机时间误报
+    final ProviderContainer c3 =
+        _container(FakeClockInRepository(fix: _fixAt(_lat, _lon)));
+    await _settle(c3);
+    expect(c3.read(clockInProvider).attendance, isNull);
+    expect(c3.read(clockInProvider).lateNow, isFalse);
+  });
+
+  test('下班卡可反复重打：每次都上送，由后台取最晚一次', () async {
+    final FakeClockInRepository repo = FakeClockInRepository(
+      fix: _fixAt(_lat, _lon),
+      attendance: const AttendanceToday(
+          date: '2026-10-16', start: '09:00', end: '18:00', onTime: '08:55'),
+    );
+    final ProviderContainer c = _container(repo);
+    await _settle(c);
+
+    final ClockInNotifier notifier = c.read(clockInProvider.notifier);
+    await notifier.doClockIn(ClockType.checkOut);
+    expect(c.read(clockInProvider).hasCheckedOut, isTrue);
+
+    // 打得早、又补打一次：按钮不该锁死，第二次照样要发出去
+    await notifier.doClockIn(ClockType.checkOut);
+    final ClockInState s = c.read(clockInProvider);
+
+    expect(repo.submitted, hasLength(2), reason: '两次下班打卡都要上送，后台按最晚合并');
+    expect(
+      repo.submitted.every((ClockRecord r) => r.type == ClockType.checkOut),
+      isTrue,
+    );
+    expect(s.nextClockType, ClockType.checkOut,
+        reason: '下班卡可随时重打，按钮不消失');
+  });
+
+  test('打卡成功返回结果（供鼓励卡片展示）；离线时返回未同步结果而不是 null', () async {
+    final FakeClockInRepository online = FakeClockInRepository(
+      fix: _fixAt(_lat, _lon),
+      attendance: const AttendanceToday(
+          date: '2026-10-16', start: '09:00', end: '18:00'),
+    );
+    final ProviderContainer c1 = _container(online);
+    await _settle(c1);
+    final ClockSubmitResult? r1 = await c1
+        .read(clockInProvider.notifier)
+        .doClockIn(ClockType.checkIn);
+
+    expect(r1, isNotNull, reason: '成功打卡必须回结果，卡片才知道记了几点');
+    expect(r1!.synced, isTrue);
+    expect(r1.id, isNotNull);
+    expect(c1.read(clockInProvider).lastResult, isNotNull);
+
+    // 离线：本地已留存，卡片照弹（标注待同步），不能因为同步失败就不给反馈
+    final FakeClockInRepository offline = FakeClockInRepository(
+      fix: _fixAt(_lat, _lon),
+      syncError: '网络不可用',
+    );
+    final ProviderContainer c2 = _container(offline);
+    await _settle(c2);
+    final ClockSubmitResult? r2 = await c2
+        .read(clockInProvider.notifier)
+        .doClockIn(ClockType.checkIn);
+
+    expect(r2, isNotNull);
+    expect(r2!.synced, isFalse);
+    expect(c2.read(clockInProvider).records, hasLength(1),
+        reason: '同步失败也不能丢记录');
+  });
+
+  test('被拦下的打卡返回 null（失败原因走页面红色区块，不弹鼓励卡片）', () async {
+    // 越界：不该有任何「成功」表示
+    final FakeClockInRepository repo =
+        FakeClockInRepository(fix: _fixAt(_lat + 0.05, _lon));
+    final ProviderContainer c = _container(repo);
+    await _settle(c);
+
+    final ClockSubmitResult? r =
+        await c.read(clockInProvider.notifier).doClockIn(ClockType.checkIn);
+
+    expect(r, isNull);
+    expect(c.read(clockInProvider).error, contains('超出'));
   });
 
   test('待同步记录序列化往返一致（用于本地兜底队列）', () {

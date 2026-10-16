@@ -6,6 +6,7 @@ import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/campus.dart';
 import 'package:teacher_app/data/models/clock_record.dart';
 import 'package:teacher_app/features/clock_in/data/clock_in_repository.dart';
+import 'package:teacher_app/features/clock_in/domain/attendance.dart';
 
 final Provider<ClockInRepository> clockInRepositoryProvider =
     Provider<ClockInRepository>((ref) => const ClockInRepository());
@@ -33,6 +34,9 @@ class ClockInState {
     this.currentLatitude,
     this.currentLongitude,
     this.lastDistance,
+    this.attendance,
+    this.loadingAttendance = false,
+    this.lastResult,
   });
 
   /// 当前选中的打卡校区。
@@ -83,6 +87,52 @@ class ClockInState {
   final double? currentLongitude;
   final double? lastDistance;
 
+  /// 后台下发的「今日考勤」：生效班次 + 当天已打卡时间 + 服务器时间。
+  ///
+  /// null = 没拿到（未登录 / 网络失败 / 后端未升级）。此时按钮流转与迟到判定
+  /// 退回「只用本地打卡记录 + 本机时间」，**不阻止打卡**。
+  final AttendanceToday? attendance;
+
+  /// 正在拉取今日考勤。
+  final bool loadingAttendance;
+
+  /// 最近一次打卡的结果（后台合并后的当天状态），用于弹「结果确认卡片」。
+  final ClockSubmitResult? lastResult;
+
+  /// 是否已打过「上班」卡：**后台记录与本地未同步记录都要算**。
+  ///
+  /// 只看后台会在断网打卡后把按钮错回「上班打卡」，老师会以为刚才那下没成功而重复打卡；
+  /// 只看本地则换手机/重装后认不出已经在后台的打卡。两边取或。
+  bool get hasCheckedIn =>
+      (attendance?.hasCheckedIn ?? false) || _hasLocalToday(ClockType.checkIn);
+
+  bool get hasCheckedOut =>
+      (attendance?.hasCheckedOut ?? false) || _hasLocalToday(ClockType.checkOut);
+
+  /// 下一步该打哪种卡：没打上班卡 → 上班卡；打过 → 下班卡。
+  ///
+  /// 下班卡**随时可打、可反复刷新**（后台按「同一天取最晚」合并），所以打过之后
+  /// 按钮不会消失，而是继续允许重打。
+  ClockType get nextClockType =>
+      hasCheckedIn ? ClockType.checkOut : ClockType.checkIn;
+
+  /// 后台口径的「现在」（用后台时间校准手机时钟）；拿不到后台时间时用本机时间。
+  DateTime get now => attendance?.now ?? DateTime.now();
+
+  /// 此刻打上班卡是否已算迟到（后台班次为唯一真相）。
+  bool get lateNow => attendance != null && attendance!.isLateAt(now);
+
+  bool _hasLocalToday(ClockType type) {
+    final DateTime t = now;
+    for (final ClockRecord r in records) {
+      if (r.type != type) continue;
+      if (r.time.year == t.year && r.time.month == t.month && r.time.day == t.day) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// 当前校区是否可用于打卡（未选中校区、或校区未配置坐标时均为 false）。
   bool get campusClockable => campus?.hasGeo ?? false;
 
@@ -108,6 +158,9 @@ class ClockInState {
     double? currentLatitude,
     double? currentLongitude,
     double? lastDistance,
+    AttendanceToday? attendance,
+    bool? loadingAttendance,
+    ClockSubmitResult? lastResult,
   }) =>
       ClockInState(
         campus: campus ?? this.campus,
@@ -133,6 +186,9 @@ class ClockInState {
         currentLatitude: currentLatitude ?? this.currentLatitude,
         currentLongitude: currentLongitude ?? this.currentLongitude,
         lastDistance: lastDistance ?? this.lastDistance,
+        attendance: attendance ?? this.attendance,
+        loadingAttendance: loadingAttendance ?? this.loadingAttendance,
+        lastResult: lastResult ?? this.lastResult,
       );
 }
 
@@ -145,9 +201,22 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
   ClockInNotifier(this._repository) : super(const ClockInState()) {
     unawaited(_restorePending());
     unawaited(loadCampuses());
+    unawaited(loadAttendance());
   }
 
   final ClockInRepository _repository;
+
+  /// 拉取「今日考勤」：生效班次 + 当天已打卡时间 + 服务器时间。
+  ///
+  /// 失败**不报错、不阻断**：打卡页照样能用（按钮流转退回本地记录口径），
+  /// 只是拿不到「应上班时间」时不弹迟到确认框（宁可少打扰，也不能误报迟到）。
+  Future<void> loadAttendance() async {
+    if (state.loadingAttendance) return;
+    state = state.copyWith(loadingAttendance: true);
+    final AttendanceToday? a = await _repository.fetchAttendanceToday();
+    if (!mounted) return;
+    state = state.copyWith(loadingAttendance: false, attendance: a);
+  }
 
   /// 切换打卡校区，并记住这次选择（下次进入本页直接用它）。
   void setCampus(Campus campus) {
@@ -258,8 +327,11 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
   }
 
   /// 执行签到（上班 / 下班）。
-  Future<void> doClockIn(ClockType type) async {
-    if (state.loading) return; // 防重复点击
+  ///
+  /// 返回本次打卡结果（离线留存时 `synced=false`，卡片照样弹）；被拦下
+  /// （无校区 / 越界 / 定位失败）时返回 null，由页面展示 state.error。
+  Future<ClockSubmitResult?> doClockIn(ClockType type) async {
+    if (state.loading) return null; // 防重复点击
 
     // 没有任何校区数据时不能继续：没有打卡点就没有围栏，任何结论都是编的。
     final Campus? target = state.campus;
@@ -275,7 +347,7 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
                 '请检查网络后点上方「重试」重新加载；'
                 '如确已到岗，可改用「补卡申请」。',
       );
-      return;
+      return null;
     }
 
     // 校区未配坐标时不进定位：算不出距离，任何结论都是编的。
@@ -286,13 +358,13 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
             '请联系管理员在 OA 网页「学校管理」中录入该校区坐标；'
             '如确已到岗，可先改用「补卡申请」。',
       );
-      return;
+      return null;
     }
 
     state = state.copyWith(loading: true, error: null, notice: null);
     try {
       final LocationFix fix = await _repository.acquireLocation();
-      if (!mounted) return;
+      if (!mounted) return null;
 
       final double? distance = _repository.distanceTo(
         campus: target,
@@ -305,7 +377,7 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
           loading: false,
           error: '「${target.name}」的打卡坐标不可用，本次打卡未生效。',
         );
-        return;
+        return null;
       }
 
       if (!_repository.isWithinFence(target, distance)) {
@@ -318,12 +390,15 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
               '超出 ${target.effectiveRadius.toInt()} 米围栏，本次打卡未生效。'
               '请到校区范围内重试；如确已到岗但无法定位，请改用「补卡申请」。',
         );
-        return;
+        return null;
       }
 
+      // 打卡时刻取「后台校准后的时间」：手机系统时间被改过时，用它才能保证
+      // 后台的迟到/早退判定与老师看到的时刻是同一个瞬间。
+      final DateTime clockedAt = state.now;
       final ClockRecord record = ClockRecord(
         type: type,
-        time: DateTime.now(),
+        time: clockedAt,
         campusName: target.name,
         campusId: target.id,
         latitude: fix.latitude,
@@ -345,16 +420,25 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
         notice: fix.degraded ? fix.degradedReason : null,
       );
       await _persistPending();
-      if (!mounted) return;
+      if (!mounted) return null;
 
       // 再尝试同步到后台。
-      await _sync(record);
+      final ClockSubmitResult? result = await _sync(record);
+      if (result != null) {
+        // 同步成功后刷新「今日考勤」：按钮流转、已打卡时间以后台合并结果为准。
+        unawaited(loadAttendance());
+        return result;
+      }
+      // 后台没同步成功也不能让老师以为打卡失败：本地已留存，卡片照弹（标注待同步）。
+      return ClockSubmitResult(type: type, time: clockedAt, synced: false);
     } on ClockInException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return null;
       state = state.copyWith(loading: false, error: e.message);
+      return null;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return null;
       state = state.copyWith(loading: false, error: '打卡失败：$e');
+      return null;
     }
   }
 
@@ -365,40 +449,49 @@ class ClockInNotifier extends StateNotifier<ClockInState> {
   }
 
   /// 同步单条记录到后台；失败则保留为「待同步」，并给出明确提示。
-  Future<void> _sync(ClockRecord record) async {
+  ///
+  /// 返回后台合并后的当天状态（成功时），失败返回 null —— 调用方据此决定
+  /// 弹「结果确认卡片」还是提示「已记录在本地，稍后重试」。
+  Future<ClockSubmitResult?> _sync(ClockRecord record) async {
     state = state.copyWith(syncing: true);
     try {
-      await _repository.saveRemote(record);
-      if (!mounted) return;
+      // 走 /clock 而不是通用记录新增：服务端按「员工 + 日期」合并，
+      // 上班取最早、下班取最晚，同一天恒定一行。
+      final ClockSubmitResult result = await _repository.submitClock(record);
+      if (!mounted) return result;
       _replaceRecord(record.copyWith(synced: true));
       await _persistPending();
-      if (!mounted) return;
+      if (!mounted) return result;
       // 全部同步成功后清掉同步类提示。
       final bool allSynced = state.records.every((ClockRecord r) => r.synced);
       state = state.copyWith(
         syncing: false,
         notice: allSynced ? null : state.notice,
+        lastResult: result,
       );
+      return result;
     } on ClockInException catch (e) {
-      if (!mounted) return;
+      if (!mounted) return null;
       _replaceRecord(record.copyWith(synced: false));
       await _persistPending();
-      if (!mounted) return;
+      if (!mounted) return null;
       state = state.copyWith(
         syncing: false,
         notice: '打卡已记录在本地，但同步到后台失败：${e.message}。'
             '记录不会丢失，可点记录右侧的「同步」重试。',
       );
+      return null;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return null;
       _replaceRecord(record.copyWith(synced: false));
       await _persistPending();
-      if (!mounted) return;
+      if (!mounted) return null;
       state = state.copyWith(
         syncing: false,
         notice: '打卡已记录在本地，但同步到后台失败：$e。'
             '记录不会丢失，可点记录右侧的「同步」重试。',
       );
+      return null;
     }
   }
 
