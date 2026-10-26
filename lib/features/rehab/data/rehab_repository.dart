@@ -3,6 +3,7 @@ import 'package:teacher_app/core/api_client.dart';
 import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/data/models/autism_archive.dart';
 import 'package:teacher_app/data/models/autism_eval_item.dart';
+import 'package:teacher_app/data/models/child.dart';
 import 'package:teacher_app/data/models/iep_plan.dart';
 import 'package:teacher_app/data/models/rehab.dart';
 
@@ -45,6 +46,48 @@ class RehabRepository {
     if (data is Map && data['id'] != null) return data['id'].toString();
     if (data != null) return data.toString();
     return '';
+  }
+
+  // ────────────── 儿童主档（rehab_child）：录入字段的唯一真相 ──────────────
+
+  /// 创建儿童主档，返回后端生成的 childId。
+  ///
+  /// 「新增孩子」的**第一步**：家长信息 / 第二位家长 / 出生日期 / 身份证 / 班级 /
+  /// 区、县残联意见 / 归属校区都只存在主档上，必须在这一步写进去。
+  /// 若跳过它直接建档案，后端会补建一个**只有姓名**的儿童，
+  /// 用户在录入页填的一切会在毫无提示的情况下消失（2026-10-16 之前的真实缺陷）。
+  Future<int?> createChildProfile(ChildProfile profile) async {
+    final dynamic data =
+        await apiClient.post(AppConstants.childPath, profile.toPayload());
+    if (data is num) return data.toInt();
+    if (data is String) return int.tryParse(data);
+    if (data is Map && data['id'] != null) {
+      return int.tryParse(data['id'].toString());
+    }
+    return null;
+  }
+
+  /// 按 id 取儿童主档（编辑页回填家长信息 / 残联意见 / 归属校区用）。
+  ///
+  /// 教师取**非自己负责**的儿童会抛 [ApiException]（后端按 404 语义拒绝）——
+  /// 调用方要能优雅降级，不能因此白屏。
+  Future<ChildProfile> getChildProfile(int childId) async {
+    final dynamic data =
+        await apiClient.get('${AppConstants.childPath}/$childId');
+    if (data is! Map<String, dynamic>) {
+      throw const ApiException('儿童主档响应异常');
+    }
+    return ChildProfile.fromJson(data);
+  }
+
+  /// 更新儿童主档。
+  ///
+  /// ⚠️ 后端是**全量覆盖**语义（逐字段 set，未传即置 null），
+  /// 所以调用方必须传完整 payload，不能只传改动的那几个字段 ——
+  /// 否则「只改残联意见」会把家长、班级一起清空。
+  Future<void> updateChildProfile(int childId, ChildProfile profile) async {
+    await apiClient.put(
+        '${AppConstants.childPath}/$childId', profile.toPayload());
   }
 
   /// 档案详情（含首次评估/持续评估/计划/照片/任务）。

@@ -95,6 +95,8 @@ class RehabArchive {
     this.templateType = '',
     this.evalFormCode = 'STANDARD',
     this.studentType = 'NEW',
+    this.childId,
+    this.campusId,
   });
 
   final String id;
@@ -108,6 +110,16 @@ class RehabArchive {
   final String templateType;
   /// 孤独症档案默认评测量表代码：STANDARD（残联标准）/ OFFLINE / VB。
   final String evalFormCode;
+
+  /// 关联的儿童主档 id（rehab_child.id）。
+  ///
+  /// 「新增孩子」必须带它来建档案：不带的话后端会**自动补建一个只有姓名的儿童**
+  /// （见 RehabArchiveService.create），家长 / 出生日期 / 身份证 / 班级 / 残联意见
+  /// 会全部丢失，而 OA「儿童管理」里只会看到一条空壳记录。
+  final int? childId;
+
+  /// 归属校区。档案列表在 OA 端是按 campusId 过滤的；为空时后端会继承儿童主档的校区。
+  final int? campusId;
 
   /// 新生 NEW / 老生 OLD。决定是否必须做首次评估与持续评估提醒的起始节奏。
   /// 唯一真相在后端 rehab_child，档案详情接口会回填该值。
@@ -134,9 +146,14 @@ class RehabArchive {
         templateType: (j['templateType'] as String?) ?? '',
         evalFormCode: (j['evalFormCode'] as String?) ?? 'STANDARD',
         studentType: (j['studentType'] as String?) ?? 'NEW',
+        childId: (j['childId'] as num?)?.toInt(),
+        campusId: (j['campusId'] as num?)?.toInt(),
       );
 
   /// 序列化（创建/更新档案用）。id 为空时不带上，由后端生成。
+  ///
+  /// childId 必须带上：它是「儿童主档」与「档案」的关联键，也是后端判断
+  /// 「要不要自动补建一个空壳儿童」的依据。
   Map<String, dynamic> toJson() => <String, dynamic>{
         if (id.isNotEmpty) 'id': id,
         'archiveNo': archiveNo,
@@ -146,6 +163,8 @@ class RehabArchive {
         'templateType': templateType,
         'studentType': studentType,
         if (evalFormCode.isNotEmpty) 'evalFormCode': evalFormCode,
+        if (childId != null) 'childId': childId,
+        if (campusId != null) 'campusId': campusId,
         if (remark != null) 'remark': remark,
       };
 }
