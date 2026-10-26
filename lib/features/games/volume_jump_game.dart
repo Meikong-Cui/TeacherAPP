@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -18,6 +19,8 @@ class _VolumeJumpGameState extends State<VolumeJumpGame>
     with SingleTickerProviderStateMixin {
   final AudioRecorder _recorder = AudioRecorder();
   bool _micReady = false;
+  /// 本次录音的临时文件路径。麦克风只用于实时音量计算，交互结束即删除。
+  String? _ampPath;
   bool _manual = false;
   bool _pressing = false;
   double _charge = 0;
@@ -59,6 +62,9 @@ class _VolumeJumpGameState extends State<VolumeJumpGame>
     _tick?.cancel();
     _anim.dispose();
     _recorder.dispose();
+    // 中途退出时的兜底清理（异步删除，失败忽略）
+    final String? p = _ampPath;
+    if (p != null) File(p).delete().ignore();
     super.dispose();
   }
 
@@ -82,9 +88,10 @@ class _VolumeJumpGameState extends State<VolumeJumpGame>
           setState(() => _manual = true);
         } else {
           final dir = await getTemporaryDirectory();
+          _ampPath = '${dir.path}/vol_jump_amp.m4a';
           await _recorder.start(
             const RecordConfig(encoder: AudioEncoder.aacLc, numChannels: 1),
-            path: '${dir.path}/vol_jump_amp.m4a',
+            path: _ampPath!,
           );
           _micReady = true;
         }
@@ -126,8 +133,15 @@ class _VolumeJumpGameState extends State<VolumeJumpGame>
     _tick?.cancel();
     try {
       if (_micReady) await _recorder.stop();
+      // 麦克风只用于实时音量计算：本次交互结束立即删除录音，不在设备上留存音频
+      final String? p = _ampPath;
+      if (p != null) {
+        final File f = File(p);
+        if (await f.exists()) await f.delete();
+      }
+      _ampPath = null;
     } catch (_) {
-      // 忽略停止异常
+      // 忽略停止与清理异常
     }
     _jump(_charge);
   }
