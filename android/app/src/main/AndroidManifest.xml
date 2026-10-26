@@ -16,7 +16,7 @@
     <!-- 生产接口走 HTTPS（hrblk.cn），release 构建禁止明文流量；
          debug / profile 清单各自放开，便于连本机 http 后端联调。 -->
     <application
-        android:label="teacher_app"
+        android:label="哈哈龙教师端"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false">

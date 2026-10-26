@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_app/app/design_tokens.dart';
+import 'package:teacher_app/core/constants.dart';
 import 'package:teacher_app/core/theme_mode_notifier.dart';
 import 'package:teacher_app/features/auth/data/auth_repository.dart';
 import 'package:teacher_app/data/providers.dart';
@@ -107,13 +108,22 @@ class ProfileScreen extends ConsumerWidget {
             SoftCard(
               onTap: () => showAboutDialog(
                 context: context,
-                applicationName: '哈哈龙康复教师端',
+                applicationName: '哈哈龙教师端',
                 applicationVersion: '1.0.0',
-                children: const <Widget>[
-                  Text('儿童康复教育系统 · 教师端 App（Flutter）'),
+                children: <Widget>[
+                  const Text('儿童康复教育系统 · 教师端 App（Flutter）'),
+                  const SizedBox(height: 12),
+                  // APP 备案号：工信部要求 App 在显著位置标注，关于页与下方常驻各展示一次
+                  const Text(
+                    '备案号：${AppConstants.appRecordNo}',
+                    style: TextStyle(
+                      fontSize: AppFontSize.small,
+                      color: AppPalette.inkMute,
+                    ),
+                  ),
                 ],
               ),
-              child: Row(children: const <Widget>[
+              child: const Row(children: <Widget>[
                 AccentSquare(
                   icon: Icons.info_outline,
                   gradient: AppGradients.teal,
@@ -128,6 +138,20 @@ class ProfileScreen extends ConsumerWidget {
                 ),
                 Icon(Icons.chevron_right, color: AppPalette.inkMute),
               ]),
+            ),
+
+            const SizedBox(height: 10),
+
+            // APP 备案号常驻展示（不点开「关于」也可见，满足"显著位置"要求）
+            const Center(
+              child: Text(
+                AppConstants.appRecordNo,
+                style: TextStyle(
+                  fontSize: AppFontSize.caption,
+                  color: AppPalette.inkMute,
+                  letterSpacing: 0.2,
+                ),
+              ),
             ),
 
             const SizedBox(height: 24),
