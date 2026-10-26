@@ -10,16 +10,18 @@ class AppConstants {
 
   /// 后端基础地址（App 复用 OA 后台同一套 API）。
   ///
-  /// 编译开关：默认指向生产环境公网后端（HTTP 明文；iOS 已在 Info.plist 配置 ATS 例外，
-  /// Android 已 usesCleartextTraffic=true 允许明文流量，无 IP 白名单限制）。
-  /// 本地联调时通过编译参数覆盖，无需改动源码：
+  /// 生产环境走 HTTPS 域名：证书由腾讯云签发、在 nginx 终结，http 一律 301 跳 https。
+  /// 所以默认值必须是 https —— iOS 端 ATS 按系统默认策略校验证书，Android 端 release
+  /// 已关闭明文流量（usesCleartextTraffic=false），生产包里任何 http 地址都会被拦。
+  ///
+  /// 本地联调时用编译参数覆盖，无需改动源码（debug/profile 构建放行明文流量）：
   ///   flutter build apk --dart-define=API_BASE_URL=http://<本机IP>:8099
   ///   flutter run      --dart-define=API_BASE_URL=http://10.0.2.2:8099   (安卓模拟器)
   /// Android Studio：Run → Edit Configurations → 选中 main.dart →
   ///   “Additional run args” 填入 --dart-define=API_BASE_URL=http://192.168.x.x:8099
   /// 未传参即连生产环境，默认值保持不变。
   static const String apiBaseUrl =
-      String.fromEnvironment('API_BASE_URL', defaultValue: 'http://62.234.141.250:8080');
+      String.fromEnvironment('API_BASE_URL', defaultValue: 'https://hrblk.cn');
 
   /// AI 教案生成接口路径（后端 oa-ai 模块已存在，角色门禁 TEACHER,PRINCIPAL）。
   /// 当前为预留接口，AI 能力后续接入 DeepSeek。
@@ -47,6 +49,14 @@ class AppConstants {
 
   /// 康复档案接口路径（后端 oa-rehab 模块；教师提交/查看，园长可审批）。
   static const String rehabPath = '/api/rehab';
+
+  /// 儿童主档接口路径（后端 oa-system 模块的 RehabChildController）。
+  ///
+  /// ⚠️ 与 [rehabPath] **不是同一个模块**：儿童主档（rehab_child）是
+  /// 「家长信息 / 第二位家长 / 出生日期 / 身份证 / 班级 / 区县残联意见 / 归属校区」
+  /// 的唯一真相，与档案 1:1 但独立。App「新增孩子」必须先 POST 这里拿到 childId，
+  /// 再拿它去建档案 —— 否则这些字段会被后端静默丢弃（只补建一个只有姓名的儿童）。
+  static const String childPath = '/api/children';
 
   /// 公章使用审批接口路径（后端 oa-rehab 模块的 SealApproval；
   /// TEACHER 申请，PRINCIPAL/ADMIN/FINANCE 审批）。

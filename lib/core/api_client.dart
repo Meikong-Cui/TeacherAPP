@@ -14,7 +14,7 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-/// HTTP 超时配置。生产环境 LAN/校园网常因网关把 8080 出站拦截、DNS 解析慢、
+/// HTTP 超时配置。生产接口走 HTTPS/443，但校园网与移动网络仍可能因 DNS 解析慢、
 /// 或对端挂起导致请求无响应——只要等不到 TCP 完成或服务器字节，UI 就会无限转圈。
 /// 给所有方法套一层 `.timeout()`，并在超时时统一抛出 [ApiException]，
 /// 让登录/列表/导出页真正显示"网络异常，请重试"，而不是死锁按钮。

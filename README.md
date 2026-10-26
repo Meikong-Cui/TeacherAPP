@@ -123,9 +123,10 @@ flutter run            # 连接真机 / 模拟器（定位功能需真机或带�
 - **Android**：`android/app/src/main/AndroidManifest.xml` 已包含
   `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`
 - **iOS**：`ios/Runner/Info.plist` **已入库且配置齐全** —— 定位 / 相机 / 相册 / 麦克风四项
-  权限描述 + **ATS 明文 HTTP 例外** + 显示名「哈哈龙教师端」。⚠ 它是 iOS 侧**唯一**入库的
-  配置文件，每次从源码同步到 Mac 时**必须一起带过去**：漏了 ATS 例外 iOS 上连不上 HTTP 后端
-  （登录必失败），漏了 `NSMicrophoneUsageDescription` 小游戏一开就闪退。
+  权限描述 + 显示名「哈哈龙教师端」+ ATS 仅保留 `NSAllowsLocalNetworking`（生产走 HTTPS
+  `hrblk.cn`，已无任何按 IP 放行的明文例外）。⚠ 它是 iOS 侧**唯一**入库的
+  配置文件，每次从源码同步到 Mac 时**必须一起带过去**：漏了 `NSMicrophoneUsageDescription`
+  小游戏一开就闪退。
   iOS 的 Xcode 工程本体（`Runner.xcodeproj` / `Podfile` / `AppDelegate.swift`）**不在仓库里**，
   由 Mac 上 `flutter create --platforms=ios .` 生成。
 - **Web**：定位需 HTTPS 或 localhost 环境
@@ -233,7 +234,7 @@ flutter build apk --release      # 若需发布包（需自签或上传密钥）
 | --- | --- |
 | `pubspec.yaml` | assets 声明、依赖，以及 **`version: 1.0.0+1`（TestFlight 每次上传必须递增 build 号，就写在这里）** |
 | `pubspec.lock` | 已入库，锁死插件版本；不带则 Mac 会重新解析，可能装到与验证环境不同的版本 |
-| `ios/Runner/Info.plist` | **最关键**：ATS 明文 HTTP 例外 + 定位/相机/相册/麦克风权限描述 + 显示名 |
+| `ios/Runner/Info.plist` | **最关键**：定位/相机/相册/麦克风权限描述 + ATS（仅放行本地网络）+ 显示名 + 出口合规声明 |
 | `assets/` | `assets/images/hearing_symbols/` 4 张符号图（`assets/fonts/` 已清空） |
 
 不影响打包的：`test/`（`flutter build` 不编译 test）、`README.md`、`design_preview/`、
@@ -300,9 +301,10 @@ build 号不递增，App Store Connect 会直接拒收。
 - **App Store 上架**：需 Developer 账号 + 审核，正式发布。
 
 ### 本机已踩/需注意的点
-- **iOS 权限与 ATS 已在 `Info.plist` 里配好**（定位 / 相机 / 相册 / 麦克风 + ATS 明文 HTTP 例外），
+- **iOS 权限与 ATS 已在 `Info.plist` 里配好**（定位 / 相机 / 相册 / 麦克风 + ATS 仅放行本地网络），
   **不要再手工重加**，也不要让 `flutter create` 覆盖它 —— 从仓库同步该文件即可。
-  其中 ATS 例外是因为后端仍是明文 HTTP；将来后端上 HTTPS 后可删掉该段。
+  生产地址已是 HTTPS（`https://hrblk.cn`），因此**没有任何按 IP / 明文放行的 ATS 例外**；
+  只有本地联调（模拟器 localhost、真机连局域网 http 后端）走 `NSAllowsLocalNetworking`。
 - **`flutter create` 会重写平台模板**：见上文「打包步骤」的告警（勿加 `--overwrite`，
   跑完 `git diff` 复核 iOS 与 Android 两侧配置未被冲掉）。
 - **图标**：默认占位图标可跑通流程，上架需提交正式 App Icon 全套（建议用 `flutter_launcher_icons` 生成）。

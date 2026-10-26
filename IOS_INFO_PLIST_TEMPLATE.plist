@@ -46,14 +46,23 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 
-	<!-- ===== ATS 例外：允许 http 明文（调试用；上架前建议把后端改为 HTTPS 后删掉这段）===== -->
+		<!-- ===== App Transport Security =====
+	     生产接口走 HTTPS（hrblk.cn，证书由腾讯云签发），ATS 默认策略即可完成校验，
+	     不需要任何明文例外。仅保留 NSAllowsLocalNetworking 供开发期联调
+	     （模拟器 localhost / 真机连局域网 http 后端）。
+	     刻意不使用 NSAllowsArbitraryLoads —— 全局放开明文会触发 App Store 审核问询。 -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 
-	<!-- ===== 权限描述（缺任何一个，对应功能调用即崩溃 / 上架被拒）===== -->
+	<!-- ===== 出口合规（App Store Connect 每次上传都会问）=====
+	     App 只用系统标准加密（HTTPS/TLS），属豁免范围；声明 false 后不必逐次回答。 -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+
+<!-- ===== 权限描述（缺任何一个，对应功能调用即崩溃 / 上架被拒）===== -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>需要定位权限用于上下班签到围栏</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

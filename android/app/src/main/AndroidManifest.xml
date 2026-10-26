@@ -13,11 +13,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <!-- 音量跳一跳：麦克风拾音，按音量决定跳跃距离 -->
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- 生产接口走 HTTPS（hrblk.cn），release 构建禁止明文流量；
+         debug / profile 清单各自放开，便于连本机 http 后端联调。 -->
     <application
         android:label="teacher_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"
