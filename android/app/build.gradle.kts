@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.teacher_app"
+    namespace = "com.meikongcui.teacherapp"
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.teacher_app"
+        applicationId = "com.meikongcui.teacherapp"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 21
@@ -26,11 +26,21 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            // 密钥信息从环境变量读取，避免明文写进仓库（敏感）
+            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: ""
+            storeFile = if (keystorePath.isNotEmpty()) file(keystorePath) else null
+            storePassword = System.getenv("ANDROID_STORE_PASSWORD")
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            // 使用自建 release keystore 签名（凭证由环境变量注入，见上方 signingConfigs）
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
