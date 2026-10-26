@@ -1,8 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// 签名凭证读取顺序：android/key.properties 优先，其次环境变量 ANDROID_*。
+// key.properties 已被 .gitignore 忽略 —— 有了它，Android Studio 菜单打包也能取到密钥
+// （AS 的 Gradle 进程继承不到你在 PowerShell 里 $env: 设的会话级变量，这是最常见的坑）。
+// 注意：脚本里不能写全限定名 java.util.Properties()，`java` 会被解析成 Gradle 的 java 扩展。
+val keystoreProps = Properties().apply {
+    val propsFile = rootProject.file("key.properties")
+    if (propsFile.exists()) propsFile.inputStream().use { load(it) }
+}
+
+fun signingProp(propKey: String, envKey: String): String? =
+    keystoreProps.getProperty(propKey)?.takeIf { it.isNotBlank() }
+        ?: System.getenv(envKey)?.takeIf { it.isNotBlank() }
 
 android {
     namespace = "com.meikongcui.teacherapp"
@@ -28,18 +43,19 @@ android {
 
     signingConfigs {
         create("release") {
-            // 密钥信息从环境变量读取，避免明文写进仓库（敏感）
-            val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH") ?: ""
-            storeFile = if (keystorePath.isNotEmpty()) file(keystorePath) else null
-            storePassword = System.getenv("ANDROID_STORE_PASSWORD")
-            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
-            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+            // 密钥信息来自 key.properties 或环境变量，均不入库（敏感）
+            val keystorePath = signingProp("storeFile", "ANDROID_KEYSTORE_PATH")
+            // 相对路径按 android/ 目录解析；绝对路径原样使用
+            storeFile = keystorePath?.let { rootProject.file(it) }
+            storePassword = signingProp("storePassword", "ANDROID_STORE_PASSWORD")
+            keyAlias = signingProp("keyAlias", "ANDROID_KEY_ALIAS")
+            keyPassword = signingProp("keyPassword", "ANDROID_KEY_PASSWORD")
         }
     }
 
     buildTypes {
         release {
-            // 使用自建 release keystore 签名（凭证由环境变量注入，见上方 signingConfigs）
+            // 使用自建 release keystore 签名（凭证来源：android/key.properties 或环境变量）
             signingConfig = signingConfigs.getByName("release")
         }
     }

@@ -48,6 +48,7 @@ app.*.map.json
 # 签名密钥（绝不可提交；推荐放仓库外，此处仅兜底）
 *.keystore
 *.jks
+key.properties
 
 # 本地构建同步脚本（仅本机用，不提交）
 tools/sync_to_tapp.sh
